@@ -1,0 +1,188 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u4-mapping-brain",
+  "upstream_ids": [
+    "NFR1.7",
+    "NFR3.4",
+    "NFR8.4",
+    "NFR8.7",
+    "NFR1.3",
+    "NFR8.5",
+    "NFR8.6",
+    "NFR1.8",
+    "NFR1.1",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR5.1",
+    "NFR5.5",
+    "NFR1.10",
+    "NFR6.1",
+    "NFR7.1",
+    "NFR1.2",
+    "NFR5.2",
+    "NFR5.4",
+    "NFR1.6",
+    "NFR5.3",
+    "NFR3.3",
+    "NFR3.5",
+    "NFR1.4",
+    "NFR1.9",
+    "NFR1.5",
+    "NFR3.6",
+    "NFR3.11"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.7",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (Bedrock: cuota de invocaciones simultáneas)"
+    },
+    {
+      "id": "NFR3.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (2 tareas x 7 lugares; despliegue con maximumPercent = 100, nunca más de 2 tareas), §2 (cuota de Bedrock ≥ 15) y §4 (GLOBAL_DAILY_TOKEN_CAP derivado del presupuesto)"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (tiempo de inactividad del ALB configurado por encima de 25 s) y plazo en la app"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (tareas siempre calientes, 2 tareas fijas)"
+    },
+    {
+      "id": "NFR1.3",
+      "status": "N/A",
+      "target": "lógica de aplicación en brain/core/** sin recurso propio; probada en el job verify de cicd-pipeline.md §2"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "N/A",
+      "target": "prompts compactos y max_tokens en la app; medido con monitoring-design.md §3"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "N/A",
+      "target": "lotes de waf-evaluate en la app; medido con monitoring-design.md §3"
+    },
+    {
+      "id": "NFR1.8",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (S3 brain-inventory con versiones y puntero active; EventBridge Scheduler + ECS RunTask InventoryJob)"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (Entrada: ALB HTTPS) y §2 (AWS WAF, regla por IP); CORS en la app"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (DynamoDB brain-usage, clave se#sub#min)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (DynamoDB brain-usage, clave se#sub#day) y §4 (DAILY_TOKEN_CAP derivado del presupuesto con token-caps.mjs y compuerta de cdk synth)"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (roles de IAM por componente, sin comodines)"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §3 (salidas BrainUrl y CognitoDomain hacia u7)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (roles asumidos por ECS y Lambda; Secrets Manager) y cicd-pipeline.md §2 (OIDC con dos roles; escaneo de secretos con gitleaks en verify)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (registro de invocaciones de Bedrock desactivado) y monitoring-design.md §4 (sin registros de acceso del ALB)"
+    },
+    {
+      "id": "NFR1.10",
+      "status": "N/A",
+      "target": "lógica de aplicación en brain/core/** sin recurso propio; probada en el job verify de cicd-pipeline.md §2"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 job verify (Vitest con umbral de 80 % en brain/core/**)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "N/A",
+      "target": "lógica de aplicación en brain/core/** sin recurso propio; probada en el job verify de cicd-pipeline.md §2"
+    },
+    {
+      "id": "NFR1.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (Entrada: ALB) con contador de cuerpo de 256 KB en la app"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (Cognito user pool y cliente extension con PKCE)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (Cognito: token de acceso de 1 hora; cliente probe con alcance brain/probe)"
+    },
+    {
+      "id": "NFR1.6",
+      "status": "OK",
+      "target": "monitoring-design.md §2 (brain-healthy-hosts, brain-inventory-reload) y chequeo de salud del ALB"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "N/A",
+      "target": "responsabilidad de u7 (service worker); el cerebro solo recibe el token"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (Escalado fijo en 2 tareas, MAX_INSTANCES = 2)"
+    },
+    {
+      "id": "NFR3.5",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (tarea de 1 GB para dos copias del inventario) y §2 (S3)"
+    },
+    {
+      "id": "NFR1.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (EventBridge Scheduler + Lambda Probe, cliente de máquina de Cognito, Secrets Manager); monitoring-design.md §3"
+    },
+    {
+      "id": "NFR1.9",
+      "status": "OK",
+      "target": "monitoring-design.md §1 y §2 (InventoryAgeDays emitida por brain-api cada 5 min; brain-inventory-age con datos faltantes como incumplimiento)"
+    },
+    {
+      "id": "NFR1.5",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (2 tareas Fargate en 2 zonas detrás del ALB; despliegue de una tarea a la vez con minimumHealthyPercent = 50)"
+    },
+    {
+      "id": "NFR3.6",
+      "status": "OK",
+      "target": "monitoring-design.md §4 (grupos de registros, toLogRecord con lista blanca)"
+    },
+    {
+      "id": "NFR3.11",
+      "status": "OK",
+      "target": "monitoring-design.md §4 (tablero Brain) y §5 (revisión semanal)"
+    }
+  ]
+}

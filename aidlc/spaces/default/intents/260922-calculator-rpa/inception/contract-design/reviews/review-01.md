@@ -1,0 +1,31 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-11-21T04:45:00Z
+**Iteration:** 1
+**Verdict Dictated:** no
+
+Pase asesor único (advisory). Los hallazgos son soporte de decisión para el humano en la compuerta; no hay bucle de corrección detrás de esta revisión. Veredicto desde hallazgos abiertos únicamente.
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | contract-summary.md > C2 `WafResponse.perService` items (schema de `recommendations` / `noFindings`) | El schema no hace cumplir FR8.4. `recommendations` es `required` pero puede ser `[]`, y `noFindings` es opcional: una respuesta con `recommendations: []` y sin `noFindings` es válida contra el schema y sin embargo viola el pass/fail observable de FR8.4 ("nunca una respuesta vacía o sin pilar; usar el enunciado explícito de sin hallazgos"). La prosa de la descripción dice "Vacío NO está permitido implícitamente", pero el contrato no lo impone, así que el cliente no puede confiar en el shape para distinguir "sin hallazgos" de "respuesta vacía por fallo". | Hacer el invariante verificable en el contrato: o bien exigir `recommendations` no vacío salvo cuando `noFindings` es `true` (y marcar `noFindings` como `required` o acoplarlo con un `oneOf`/`minItems`), o documentar explícitamente que el cliente trata `recommendations: []` sin `noFindings:true` como `empty_result` tipado. Dejarlo decidido antes de Code Generation de U4/U6. | New |
+| R-02 | Minor | contract-summary.md > C1 y C2 (campo `BrainError.code` enum divergente) | El enum de `BrainError.code` difiere entre contratos: C1 incluye `unknown_service`, C2 no. Es correcto por dominio (C2 no tiene concepto de servicio desconocido por label), pero `BrainError` se define dos veces con el mismo nombre y forma distinta. Al implementarse como un módulo de error compartido en el cliente (NFR3/NFR8, un solo manejador de error tipado), esa divergencia de enum puede inducir un tipo unión implícito no documentado. | Documentar que `BrainError` es un schema por-contrato (no un tipo compartido único) y que el código de cliente debe tratar `code` como enum abierto — ignorar un `code` desconocido como `internal_error` —, consistente con la regla "consumidores ignoran campos desconocidos". Opcionalmente unificar el enum con `unknown_service` presente en ambos y marcado N/A para C2. | New |
+| R-03 | Minor | contract-summary.md > C1 `DomField` vs domain-design `DomResolver` (enum `type`) y `MappingAction` (enum `actionType`) | Los enums de `DomField.type` y `MappingAction.actionType` del contrato deben mantenerse en paridad con lo que `scanForm`/`executeActions` (U5, Zona B) producen/aplican realmente (FIX-1..FIX-9, tipos CloudScape: dropdown, radiogroup, instance_radio, slider, toggle). Hoy la lista parece cubrir el inventario, pero el contrato es el punto de verdad cruzado U4↔U5 y no hay una nota de quién la mantiene sincronizada cuando aparezca un tipo de campo nuevo. | Añadir una nota de ownership: cuando U5 descubra un tipo de campo/acción nuevo, es un cambio aditivo al enum del contrato propiedad de U4, acordado con U5. Confirmar la paridad del enum al cerrar Functional Design de U5. | New |
+| R-04 | Minor | contract-summary.md > "Preguntas abiertas" (autenticación C1/C2) | La pregunta abierta de autenticación extensión↔cerebro queda diferida a NFR/Infra Design. Correcto para no bloquear el skeleton (U1 es agnóstico del cerebro y no toca estos contratos), pero el contrato no declara dónde vivirá el token/el origen permitido en el shape HTTP (header vs. body), lo que podría forzar un cambio de contrato posterior si se mete en el body. | Reservar explícitamente la autenticación a un header (p. ej. `Authorization`/un header de token) en la nota del contrato, de modo que añadirla sea aditivo y no un cambio de ruptura del request body. No bloquea esta etapa. | New |
+
+### Validation Tool Results
+
+| Tool | Result | Interpretation |
+|---|---|---|
+| OpenAPI $ref resolution (manual) | PASS | C1: `MapResidueRequest`, `MapResidueResponse`, `DomField`, `RequestedValue`, `MappingAction`, `BrainError` todos definidos en `components.schemas`. C2: `WafRequest`, `WafResponse`, `WafRecommendation`, `BrainError` todos definidos. Ningún `$ref` cuelga. |
+| YAML/OpenAPI 3.0.3 shape (manual) | PASS | Ambos bloques son OpenAPI 3.0.3 válidos: `servers` con variable `brainBaseUrl`, `paths`, `requestBody.required`, respuestas `200`/`4XX`/`5XX` (códigos de rango permitidos como string), enums y `required` bien formados. |
+| Entidades de dominio vs payloads (manual) | PASS con nota | `MappingAction` del contrato (`fieldLabel, actionType, value`) es el subconjunto wire de la entidad de dominio (`actionId, fieldLabel, actionType, value, source`); `WafRecommendation` (`pillar, text` bajo `perService[].service`) cubre la entidad (`recommendationId, serviceName, pillar, text`) con `serviceName` elevado a agrupación. Shapes coherentes; la única brecha de dominio es la del hallazgo Major (invariante FR8.4 no impuesto). |
+| Cobertura del DAG (manual) | PASS | Los dos únicos bordes de red reales del DAG (u5→u4 residuo de mapeo, u6→u4 WAF) están formalizados como C1 y C2. Los bordes de módulo ES embebidos (u2/u3/u5/u6) se listan como interfaces internas, no como specs OpenAPI — distinción correcta. u7→u4 es dependencia de decisión de alojamiento, correctamente fuera de los contratos de red. Ningún borde de red faltante; ningún contrato fantasma. |
+
+### Summary
+
+Los dos contratos de red (C1 `/map-residue`, C2 `/waf-evaluate`) parsean, resuelven sus `$ref`, honran las decisiones Q1-Q4 (dos endpoints REST, `brainBaseUrl` agnóstico, payload de contexto completo sin screenshots por ADR-005, timeout+backoff+error tipado) y las reglas duras afirmadas (credencial del FM server-side, host mínimo-privilegio diferido a u7). La única preocupación no-trivial es que el shape de C2 no hace cumplir el invariante FR8.4 de "sin hallazgos explícito / nunca vacío" (`noFindings` opcional frente a `recommendations` vacío permitido) — implementable pero deja ambigüedad que U4/U6 deben cerrar en Code Generation. Nada bloquea el walking skeleton (U1 es agnóstico del cerebro). Advisory READY con las correcciones anteriores como recomendaciones.

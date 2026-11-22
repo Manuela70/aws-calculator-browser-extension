@@ -1,0 +1,140 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u5-rpa-dom",
+  "upstream_ids": [
+    "NFR2.1",
+    "NFR2.3",
+    "NFR3.1",
+    "NFR3.5",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR5.1",
+    "NFR5.5",
+    "NFR8.4",
+    "NFR8.6",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR2.2",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR3.4",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR8.5"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 (no-restricted-syntax, única compuerta, paso 4 de lint)"
+    },
+    {
+      "id": "NFR2.3",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR3.5",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 (bloque de lint del content script: sin fetch)"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 y §3 paso 6 (check:bundle: origen de URL, patrones de secreto)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 (sin chrome.storage en el content script)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (recorte a 200 caracteres, prueba automática)"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (corte de 3 minutos con service-timer.js y reloj inyectado)"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 y §3 paso 5 (umbral por glob de la Zona A de U5, 80 % líneas y ramas)"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (SMOKE.md con nueve casos) y §1 (check:bundle verifica sus encabezados)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 (no-restricted-imports y no-restricted-globals en Zona A)"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3 paso 6 (npm run check:bundle)"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (grupo Agregador, prueba automática)"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR3.4",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (grupo Resultado, prueba automática)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 (sin APIs de HTML en todo el bundle)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "N/A",
+      "target": "comportamiento de Zona B sobre el DOM real (esperas, guardado, relectura, salida sin guardar); sin infraestructura; verificado con el smoke manual de cicd-pipeline.md §4"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (validateShareUrl, prueba automática)"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "cicd-pipeline.md §4 (RetryCounter, prueba automática)"
+    }
+  ]
+}

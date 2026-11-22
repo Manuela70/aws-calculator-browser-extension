@@ -1,0 +1,110 @@
+{
+  "stage": "nfr-design",
+  "unit": "u7-packaging",
+  "upstream_ids": [
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR4.4",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.5",
+    "NFR5.4",
+    "NFR5.6",
+    "NFR3.1",
+    "NFR8.1",
+    "NFR1.1",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR6.1",
+    "NFR7.3"
+  ],
+  "coverage": [
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR4.1)"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR4.2)"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR4.3)"
+    },
+    {
+      "id": "NFR4.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR4.4)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.1)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.2)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.3)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.5)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.4)"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.6)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.1)"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR8.1)"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR1.1)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR7.1)"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR7.2)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR6.1)"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR7.3)"
+    }
+  ]
+}

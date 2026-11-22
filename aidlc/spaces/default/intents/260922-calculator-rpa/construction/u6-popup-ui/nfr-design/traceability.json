@@ -1,0 +1,86 @@
+{
+  "stage": "nfr-design",
+  "unit": "u6-popup-ui",
+  "upstream_ids": [
+    "NFR8.5",
+    "NFR8.6",
+    "NFR8.7",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR8.4",
+    "NFR6.1",
+    "NFR6.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "performance-design.md (NFR8.5)"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "OK",
+      "target": "performance-design.md (NFR8.6)"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "performance-design.md (NFR8.7)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.1)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.2)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.3)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.4)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.5)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.1)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.2)"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR8.4)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "logical-components.md §3 (NFR6.1)"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "logical-components.md §3 (NFR6.2)"
+    }
+  ]
+}

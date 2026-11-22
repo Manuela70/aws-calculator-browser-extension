@@ -1,0 +1,92 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u6-popup-ui",
+  "upstream_ids": [
+    "NFR8.5",
+    "NFR8.7",
+    "NFR8.6",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR5.1",
+    "NFR5.5",
+    "NFR8.4",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR8.1",
+    "NFR6.1",
+    "NFR6.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "monitoring-design.md §1"
+    },
+    {
+      "id": "NFR8.7",
+      "status": "OK",
+      "target": "monitoring-design.md §1 e infrastructure-specification.md §3"
+    },
+    {
+      "id": "NFR8.6",
+      "status": "OK",
+      "target": "monitoring-design.md §1"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (tests/u6: messageFor con todos los códigos)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (tests/u6: runId ajeno y DONE sin URL válida)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (lint) e infrastructure-specification.md §2 (CSP)"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (mensajes del service worker)"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (tests/u6: cada estado de espera con su salida)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (tests/u6: isValidEstimateUrl)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3 (smoke: aviso junto al área de lenguaje natural)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (storage.session con prefijo panel:) y cicd-pipeline.md §1"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (tests/u6: plazos del panel con reloj inyectado)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (umbral 80 % líneas y ramas)"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3 (smoke de accesibilidad)"
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS Calculator — Applying</title>
+    <!-- Panel lateral (U1, walking skeleton). PROVISIONAL: U6 completa los estados M1-M8. -->
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0f1117;
+        color: #e2e8f0;
+        min-width: 300px;
+      }
+      .header {
+        background: linear-gradient(135deg, #ff9900, #ff6b00);
+        padding: 14px 16px;
+      }
+      .header h1 {
+        font-size: 14px;
+        color: #fff;
+      }
+      .header p {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.85);
+        margin-top: 2px;
+      }
+      main {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      h2,
+      label.section-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: block;
+        margin-bottom: 6px;
+      }
+      textarea {
+        width: 100%;
+        height: 180px;
+        background: #1e2330;
+        border: 1px solid #2d3748;
+        border-radius: 8px;
+        color: #e2e8f0;
+        font-family: "Courier New", monospace;
+        font-size: 11px;
+        padding: 10px;
+        resize: vertical;
+      }
+      textarea:focus {
+        outline: none;
+        border-color: #ff9900;
+      }
+      button {
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 10px;
+        background: #2d3748;
+        color: #e2e8f0;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-run {
+        width: 100%;
+        padding: 11px;
+        font-size: 13px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #ff9900, #ff6b00);
+        color: #fff;
+      }
+      .link-button {
+        background: none;
+        color: #ff9900;
+        padding: 0;
+        margin-top: 6px;
+        text-decoration: underline;
+        font-weight: 400;
+      }
+      .progress-bar {
+        height: 4px;
+        background: #2d3748;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #ff9900, #ff6b00);
+        transition: width 0.4s ease;
+      }
+      .progress-text {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 4px;
+      }
+      .box {
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .box.info {
+        background: #1e3a5f;
+        border: 1px solid #2563eb;
+        color: #93c5fd;
+      }
+      .box.success {
+        background: #14532d;
+        border: 1px solid #16a34a;
+        color: #86efac;
+      }
+      .box.error {
+        background: #4c0519;
+        border: 1px solid #dc2626;
+        color: #fca5a5;
+      }
+      .box.warning {
+        background: #451a03;
+        border: 1px solid #d97706;
+        color: #fcd34d;
+      }
+      .result-list {
+        margin: 6px 0 0 16px;
+      }
+      .result-link {
+        color: #ff9900;
+        word-break: break-all;
+        display: block;
+        margin-top: 8px;
+      }
+      .runs {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .run-row {
+        background: #1e2330;
+        border: 1px solid #2d3748;
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+      }
+      .run-actions,
+      .log-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .muted {
+        font-size: 11px;
+        color: #64748b;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>AWS Calculator — Applying</h1>
+      <p>Genera tu estimado en calculator.aws desde un JSON</p>
+    </header>
+
+    <main>
+      <section>
+        <label class="section-label" for="json-input">JSON de servicios</label>
+        <textarea
+          id="json-input"
+          data-testid="sidepanel-json-input"
+          placeholder='{"project":"Mi Proyecto","region":"us-east-1","services":[...]}'
+        ></textarea>
+        <button
+          type="button"
+          class="link-button"
+          id="btn-example"
+          data-testid="sidepanel-load-example-button"
+        >
+          Cargar ejemplo (EC2 t3.micro)
+        </button>
+      </section>
+
+      <button type="button" class="btn-run" id="btn-run" data-testid="sidepanel-run-button">
+        Generar Estimado
+      </button>
+
+      <section id="progress" data-testid="sidepanel-progress" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-text" id="progress-text" data-testid="sidepanel-progress-text"></div>
+      </section>
+
+      <div id="status" class="box info" data-testid="sidepanel-status" role="status" hidden></div>
+      <div
+        id="log-warning"
+        class="box warning"
+        data-testid="sidepanel-log-warning"
+        role="status"
+        hidden
+      ></div>
+
+      <section id="result" class="box" data-testid="sidepanel-result" hidden>
+        <p class="muted" id="result-caption"></p>
+        <p id="result-title" data-testid="sidepanel-result-title"></p>
+        <ul class="result-list" id="result-list" data-testid="sidepanel-result-list"></ul>
+        <div id="result-url" hidden>
+          <a
+            id="result-link"
+            class="result-link"
+            data-testid="sidepanel-result-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          ></a>
+          <button type="button" id="btn-copy" data-testid="sidepanel-copy-url-button">
+            Copiar URL
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Registro técnico</h2>
+        <p class="muted" id="runs-total" data-testid="sidepanel-runs-total-size"></p>
+        <ul class="runs" id="runs-list" data-testid="sidepanel-runs-list"></ul>
+        <div class="log-actions" style="margin-top: 8px">
+          <button type="button" id="btn-export-all" data-testid="sidepanel-export-all-button">
+            Exportar todo
+          </button>
+          <button type="button" id="btn-delete-all" data-testid="sidepanel-delete-all-button">
+            Borrar todo
+          </button>
+          <button type="button" id="btn-repair" data-testid="sidepanel-repair-index-button">
+            Reparar índice
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

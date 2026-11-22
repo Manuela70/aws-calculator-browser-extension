@@ -1,0 +1,25 @@
+{
+  "stage": "code-generation",
+  "unit": "u1-walking-skeleton",
+  "version": 1,
+  "writes": [
+    { "path": "package.json" },
+    { "path": "package-lock.json" },
+    { "path": "vitest.config.js" },
+    { "path": "eslint.config.js" },
+    { "path": ".prettierrc" },
+    { "path": ".gitignore" },
+    { "path": "scripts/check-bundle.js" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "aws-calculator-extension/manifest.json" },
+    { "path": "aws-calculator-extension/content.js" },
+    { "path": "aws-calculator-extension/popup.html" },
+    { "path": "aws-calculator-extension/popup.js" },
+    { "path": "aws-calculator-extension/background.js" },
+    { "path": "aws-calculator-extension/sidepanel.html" },
+    { "path": "aws-calculator-extension/sidepanel.js" },
+    { "path": "aws-calculator-extension/SMOKE.md" },
+    { "path": "aws-calculator-extension/lib/" },
+    { "path": "tests/u1/" }
+  ]
+}

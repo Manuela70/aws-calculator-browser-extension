@@ -1,0 +1,56 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u6-popup-ui",
+  "upstream_ids": [
+    "NFR1",
+    "NFR2",
+    "NFR3",
+    "NFR4",
+    "NFR5",
+    "NFR6",
+    "NFR7",
+    "NFR8"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1",
+      "status": "N/A",
+      "target": "El panel no aloja el cerebro; lo llama a través del service worker (u7)"
+    },
+    {
+      "id": "NFR2",
+      "status": "N/A",
+      "target": "El panel no toca el DOM de calculator.aws"
+    },
+    {
+      "id": "NFR3",
+      "status": "OK",
+      "target": "NFR3.1, NFR3.2"
+    },
+    {
+      "id": "NFR4",
+      "status": "N/A",
+      "target": "Los permisos y hosts los fija u7; el panel no agrega ninguno"
+    },
+    {
+      "id": "NFR5",
+      "status": "OK",
+      "target": "NFR5.1, NFR5.2, NFR5.3, NFR5.4, NFR5.5"
+    },
+    {
+      "id": "NFR6",
+      "status": "OK",
+      "target": "NFR6.1, NFR6.2"
+    },
+    {
+      "id": "NFR7",
+      "status": "N/A",
+      "target": "El panel no contiene la capa de mapeo; la estructura de módulos la fijan u2-u5 y u7"
+    },
+    {
+      "id": "NFR8",
+      "status": "OK",
+      "target": "NFR8.4, NFR8.5, NFR8.6, NFR8.7"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "stage": "functional-design",
+  "unit": "u3-deterministic-mapper",
+  "upstream_ids": [
+    "AC4.1.1",
+    "AC4.1.2",
+    "AC4.1.3",
+    "AC4.1.4",
+    "AC4.1.5"
+  ],
+  "coverage": [
+    {
+      "id": "AC4.1.1",
+      "status": "OK",
+      "target": "BR1.1, BR1.2, BR1.3, BR1.4, BR2.1, BR2.2, BR2.3, BR2.4, BR2.5, BR3.1, BR3.2, BR3.3"
+    },
+    {
+      "id": "AC4.1.2",
+      "status": "N/A",
+      "target": "delivered by u5-rpa-dom (fijar la región en el primer servicio es ejecución RPA)"
+    },
+    {
+      "id": "AC4.1.3",
+      "status": "OK",
+      "target": "BR2.6, BR3.1 (aplicar los toggles antes de escanear lo hace u5-rpa-dom; U3 no los emite y mapea los campos condicionales por pasadas)"
+    },
+    {
+      "id": "AC4.1.4",
+      "status": "OK",
+      "target": "BR3.4"
+    },
+    {
+      "id": "AC4.1.5",
+      "status": "OK",
+      "target": "BR4.1"
+    }
+  ]
+}

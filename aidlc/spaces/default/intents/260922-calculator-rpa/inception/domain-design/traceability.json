@@ -1,0 +1,25 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "US1.0", "US1.1", "US2.1", "US2.2", "US3.1",
+    "US4.1", "US4.2", "US4.3", "US4.4",
+    "US5.1", "US6.1", "US6.2", "US6.3", "US7.1", "US8.1"
+  ],
+  "coverage": [
+    { "id": "US1.0", "status": "OK", "target": "PopupController, DomResolver" },
+    { "id": "US1.1", "status": "OK", "target": "RpaOrchestrator, DomResolver, ResultAggregator" },
+    { "id": "US2.1", "status": "OK", "target": "NaturalLanguageParser, InputNormalizer" },
+    { "id": "US2.2", "status": "OK", "target": "NaturalLanguageParser, PopupController" },
+    { "id": "US3.1", "status": "OK", "target": "JsonParser, InputNormalizer" },
+    { "id": "US4.1", "status": "OK", "target": "RpaOrchestrator, DeterministicMapper, MappingBrain, DomResolver" },
+    { "id": "US4.2", "status": "OK", "target": "DomResolver" },
+    { "id": "US4.3", "status": "OK", "target": "DomResolver" },
+    { "id": "US4.4", "status": "OK", "target": "DomResolver" },
+    { "id": "US5.1", "status": "OK", "target": "MappingBrain, PopupController" },
+    { "id": "US6.1", "status": "OK", "target": "RpaOrchestrator, PopupController" },
+    { "id": "US6.2", "status": "OK", "target": "RpaOrchestrator, PopupController" },
+    { "id": "US6.3", "status": "OK", "target": "PopupController" },
+    { "id": "US7.1", "status": "OK", "target": "ResultAggregator, DomResolver" },
+    { "id": "US8.1", "status": "OK", "target": "DomResolver" }
+  ]
+}

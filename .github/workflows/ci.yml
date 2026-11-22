@@ -1,0 +1,42 @@
+# CI de la extensión AWS Calculator (infrastructure-design/cicd-pipeline.md).
+# Solo verificación: no hay despliegue automatizado (extensión unpacked).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      # Acciones oficiales fijadas por SHA de commit (tag entre comentarios).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dev-dependencies
+        run: npm ci
+      - name: Auditoría de dependencias
+        run: npm audit --audit-level=high
+      - name: Formato
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Tests y cobertura (umbral 80 % de líneas, Zona A)
+        run: npm run coverage
+      - name: Bundle sin dependencias de runtime
+        run: npm run check:bundle
+      - name: Informe de cobertura
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14

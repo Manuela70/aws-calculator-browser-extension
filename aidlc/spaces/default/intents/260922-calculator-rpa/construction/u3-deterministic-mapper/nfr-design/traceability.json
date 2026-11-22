@@ -1,0 +1,110 @@
+{
+  "stage": "nfr-design",
+  "unit": "u3-deterministic-mapper",
+  "upstream_ids": [
+    "NFR2.1",
+    "NFR2.2",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR4.1",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR8.4",
+    "NFR8.5",
+    "NFR1.1",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.1",
+    "NFR7.2"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR2.1)"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR2.2)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.1)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.2)"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR3.3)"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR4.1)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.1)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.2)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.3)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR5.4)"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR8.4)"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "OK",
+      "target": "security-design.md §2 (NFR8.5)"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "logical-components.md §1 y §3 (solo el puerto mapResidue)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "logical-components.md §4 (Vitest, umbral 80 %)"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "logical-components.md §4 (sin red ni navegador)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "logical-components.md §1 (solo import desde U5)"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "logical-components.md §1 (check:bundle)"
+    }
+  ]
+}

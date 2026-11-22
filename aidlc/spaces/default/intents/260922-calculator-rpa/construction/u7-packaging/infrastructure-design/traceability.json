@@ -1,0 +1,110 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u7-packaging",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR3.1",
+    "NFR4.1",
+    "NFR4.4",
+    "NFR5.1",
+    "NFR5.6",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR8.1",
+    "NFR6.1",
+    "NFR7.3",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (sw/config.js y sync-brain-config.js) y cicd-pipeline.md §1 (check:bundle: host del cerebro solo en dos lugares)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "traducción de códigos en código; probada en tests/u7 (cicd-pipeline.md §1) y visible en monitoring-design.md §1"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (manifest: host_permissions) y cicd-pipeline.md §1 (check:bundle con conjuntos exactos)"
+    },
+    {
+      "id": "NFR4.4",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (CSP explícita) y cicd-pipeline.md §1"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (sw/config.js sin secretos) y cicd-pipeline.md §1 (patrones de secreto) y §5"
+    },
+    {
+      "id": "NFR5.6",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (clave key para el identificador estable) y cicd-pipeline.md §3 (smoke de login)"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (Distribución unpacked) y cicd-pipeline.md §2 paso 6"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (package-zip.js) y cicd-pipeline.md §1 y §3"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "N/A",
+      "target": "plazo de 30 s en código con reloj inyectable; probado en cicd-pipeline.md §1 (tests/u7)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (umbral sw/** 80 % líneas y ramas) y §2 paso 5"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 y §2 paso 6 (check:bundle con bundle-policy.json en CI)"
+    },
+    {
+      "id": "NFR4.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (manifest: permissions con identity) y cicd-pipeline.md §1"
+    },
+    {
+      "id": "NFR4.3",
+      "status": "OK",
+      "target": "infrastructure-specification.md §2 (web_accessible_resources solo en calculator.aws con use_dynamic_url) y cicd-pipeline.md §1"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "infrastructure-specification.md §1 (storage.session) y cicd-pipeline.md §1 (lint sin storage.local)"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 (lint: fetch solo en brain-client.js y auth-flow.js)"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "N/A",
+      "target": "lógica del service worker sin recurso de infraestructura; probada en cicd-pipeline.md §1 (tests/u7) y §2 paso 5"
+    },
+    {
+      "id": "NFR5.5",
+      "status": "N/A",
+      "target": "lógica del service worker sin recurso de infraestructura; probada en cicd-pipeline.md §1 (tests/u7) y §2 paso 5"
+    }
+  ]
+}

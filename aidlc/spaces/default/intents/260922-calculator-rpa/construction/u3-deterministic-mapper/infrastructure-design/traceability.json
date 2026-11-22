@@ -1,0 +1,116 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u3-deterministic-mapper",
+  "upstream_ids": [
+    "NFR2.1",
+    "NFR8.5",
+    "NFR1.1",
+    "NFR6.1",
+    "NFR6.2",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR2.2",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR3.3",
+    "NFR4.1",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR8.4",
+    "NFR8.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 fila Lint de U3: lib/mapping/** bajo las reglas del content script (prefijo awsui_, chrome.storage, APIs de HTML), paso 4 del workflow"
+    },
+    {
+      "id": "NFR8.5",
+      "status": "N/A",
+      "target": "U3 no reintenta: el reintento vive en el service worker (U7); verificado en cicd-pipeline.md §3 (el puerto se llama una sola vez)"
+    },
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3 (grupos Independencia del cerebro y Estructura)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 y §2: umbral por carpeta lib/mapping/** 80 % líneas y ramas, paso 5 del workflow"
+    },
+    {
+      "id": "NFR6.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3: pruebas en node con fixtures, doble del puerto y temporizadores falsos"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §3 (grupo Estructura, prueba automática tests/u3/imports.test.js)"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §2 paso 6: npm run check:bundle en CI"
+    },
+    {
+      "id": "NFR2.2",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR4.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 fila Lint de U3: lib/mapping/** bajo las reglas del content script (sin fetch ni chrome.storage)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 fila Lint de U3: lib/mapping/** bajo las reglas del content script (prefijo awsui_, chrome.storage, APIs de HTML), paso 4 del workflow"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "cicd-pipeline.md §1 fila Lint de U3: lib/mapping/** bajo las reglas del content script (prefijo awsui_, chrome.storage, APIs de HTML), paso 4 del workflow"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR5.4",
+      "status": "N/A",
+      "target": "lógica de aplicación en lib/mapping/** (mapeo, coincidencia, validación del residuo); no requiere infraestructura; sus pruebas corren en el paso de cobertura de cicd-pipeline.md §3"
+    },
+    {
+      "id": "NFR8.4",
+      "status": "N/A",
+      "target": "pasadas acotadas (3) en código; verificadas en cicd-pipeline.md §3 (cierre forzado)"
+    },
+    {
+      "id": "NFR8.1",
+      "status": "N/A",
+      "target": "tope y cancelación implementados en código con la señal de la corrida; verificados con temporizadores falsos en cicd-pipeline.md §3"
+    }
+  ]
+}
