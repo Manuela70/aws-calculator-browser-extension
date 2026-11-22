@@ -31,6 +31,17 @@ const securityRules = {
   "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
 };
 
+// lib/input/** (U2) es lógica pura: extiende las reglas base y además prohíbe
+// red propia y APIs chrome.* (u2 NFR4.1). fetch ya viene de la lista base.
+const inputRules = {
+  ...securityRules,
+  "no-restricted-globals": [
+    ...securityRules["no-restricted-globals"],
+    { name: "XMLHttpRequest", message: "lib/input no hace red propia (u2 NFR4.1)." },
+    { name: "chrome", message: "lib/input no usa APIs chrome.* (u2 NFR4.1)." },
+  ],
+};
+
 export default [
   {
     ignores: ["node_modules/**", "coverage/**", "aidlc/**", ".claude/**", ".kiro/**"],
@@ -50,6 +61,10 @@ export default [
     // pueden ser módulos); carga lib/content-main.js con import() dinámico.
     files: ["aws-calculator-extension/content.js"],
     languageOptions: { sourceType: "script" },
+  },
+  {
+    files: ["aws-calculator-extension/lib/input/**/*.js"],
+    rules: inputRules,
   },
   {
     files: ["tests/**/*.js", "scripts/**/*.js", "*.config.js"],

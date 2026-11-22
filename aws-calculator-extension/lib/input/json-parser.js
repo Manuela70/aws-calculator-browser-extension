@@ -1,15 +1,25 @@
-// lib/input/json-parser.js — Parseo y validación mínima del JSON del Anexo A (BR1.1, BR1.2).
-// PROVISIONAL (U1, walking skeleton). Dueño final: U2 (que añade la entrada en
-// lenguaje natural sobre este mismo módulo).
-// Devuelve { ok: true, value: RunInput } o { ok: false, error: { code, message } }
-// con el mensaje en español para el panel; nunca lanza.
+// lib/input/json-parser.js — Grupo 2: JSON del Anexo A con esquema cerrado
+// (BR2.1-BR2.7, BR3.3; NFR3.1, NFR3.3, NFR3.4, NFR3.5).
+// Dueño: U2 (completa en sitio el provisional de U1).
+// - parseJsonText(text): tope de tamaño, JSON.parse y validación.
+// - parseRunInput(data): validador común; lo reutiliza la respuesta del cerebro
+//   para que ninguna de las dos fuentes pueda colar claves ni pasar los topes.
+// Devuelve { ok: true, value: RunInput } o { ok: false, error: InputError };
+// nunca lanza ni devuelve servicios parciales.
 
-export const PROJECT_MAX_LENGTH = 200;
-export const INVALID_JSON_MESSAGE = "❌ JSON inválido.";
+import { INPUT_ERROR_CODES as E, INVALID_JSON_MESSAGE, failInput } from "./input-errors.js";
+import {
+  MAX_FIELD_CHARS,
+  MAX_FIELDS,
+  MAX_JSON_CHARS,
+  MAX_PROJECT_CHARS,
+  MAX_SERVICES,
+  ROOT_KEYS,
+  SERVICE_KEYS,
+  isForbiddenKey,
+} from "./input-schema.js";
 
-function fail(code, message) {
-  return { ok: false, error: { code, message } };
-}
+export { INVALID_JSON_MESSAGE };
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -19,84 +29,124 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function serviceRef(index, svc) {
-  return isPlainObject(svc) && isNonEmptyString(svc.name) ? `"${svc.name}"` : `#${index + 1}`;
+// Primera clave fuera de la tabla permitida; las rechazadas se evalúan antes.
+function findUnknownKey(object, allowed) {
+  const keys = Object.keys(object);
+  return keys.find(isForbiddenKey) ?? keys.find((key) => !allowed.includes(key));
 }
 
-function validateProject(project) {
-  if (project === undefined) return null;
-  if (
-    typeof project !== "string" ||
-    project.trim().length < 1 ||
-    project.length > PROJECT_MAX_LENGTH
-  ) {
-    return fail(
-      "invalid_project",
-      `❌ "project" debe ser un texto de 1 a ${PROJECT_MAX_LENGTH} caracteres.`,
-    );
+function serviceDetails(svc, index) {
+  const service = isPlainObject(svc) && isNonEmptyString(svc.name) ? svc.name : undefined;
+  return { service, serviceIndex: index };
+}
+
+function validateRoot(data) {
+  const unknownKey = findUnknownKey(data, ROOT_KEYS);
+  if (unknownKey !== undefined) return failInput(E.UNKNOWN_KEY, { key: unknownKey });
+  if (data.project !== undefined) {
+    const project = data.project;
+    const isValid =
+      typeof project === "string" &&
+      project.trim().length > 0 &&
+      project.length <= MAX_PROJECT_CHARS;
+    if (!isValid) return failInput(E.INVALID_PROJECT, { key: "project" });
+  }
+  if (data.region !== undefined && !isNonEmptyString(data.region)) {
+    return failInput(E.INVALID_REGION, { key: "region" });
+  }
+  if (!Array.isArray(data.services)) return failInput(E.MISSING_SERVICES, { key: "services" });
+  if (data.services.length === 0) return failInput(E.EMPTY_SERVICES, { key: "services" });
+  if (data.services.length > MAX_SERVICES) {
+    return failInput(E.INPUT_LIMIT_EXCEEDED, { limit: "services", key: "services" });
   }
   return null;
 }
 
-function validateFields(fields, ref) {
+// Valor de fields como texto, igual que lo hará la normalización (BR4.3).
+function fieldValueText(value) {
+  const type = typeof value;
+  if (type === "string") return value;
+  if (type === "number" && Number.isFinite(value)) return String(value);
+  if (type === "boolean") return String(value);
+  return null;
+}
+
+function validateFields(fields, details) {
   if (fields === undefined) return null;
-  if (!isPlainObject(fields)) {
-    return fail(
-      "invalid_fields",
-      `❌ "fields" del servicio ${ref} debe ser un objeto etiqueta → valor.`,
-    );
+  if (!isPlainObject(fields)) return failInput(E.INVALID_FIELDS, { ...details, key: "fields" });
+  const forbidden = Object.keys(fields).find(isForbiddenKey);
+  if (forbidden !== undefined) return failInput(E.UNKNOWN_KEY, { ...details, key: forbidden });
+  const entries = Object.entries(fields);
+  if (entries.length > MAX_FIELDS) {
+    return failInput(E.INPUT_LIMIT_EXCEEDED, { ...details, limit: "fields", key: "fields" });
   }
-  for (const [key, value] of Object.entries(fields)) {
-    const type = typeof value;
-    if (value === null || (type !== "string" && type !== "number" && type !== "boolean")) {
-      return fail(
-        "invalid_field_value",
-        `❌ El campo "${key}" del servicio ${ref} debe ser texto, número o booleano.`,
-      );
+  for (const [key, value] of entries) {
+    const text = fieldValueText(value);
+    if (text === null) return failInput(E.INVALID_FIELD_VALUE, { ...details, key });
+    if (key.length > MAX_FIELD_CHARS || text.length > MAX_FIELD_CHARS) {
+      return failInput(E.INPUT_LIMIT_EXCEEDED, { ...details, limit: "field_chars", key });
     }
   }
   return null;
 }
 
 function validateService(svc, index) {
-  const ref = serviceRef(index, svc);
-  if (!isPlainObject(svc))
-    return fail("invalid_service", `❌ El servicio ${ref} debe ser un objeto.`);
+  const details = serviceDetails(svc, index);
+  if (!isPlainObject(svc)) return failInput(E.INVALID_SERVICE, details);
+  const unknownKey = findUnknownKey(svc, SERVICE_KEYS);
+  if (unknownKey !== undefined) return failInput(E.UNKNOWN_KEY, { ...details, key: unknownKey });
   if (!isNonEmptyString(svc.name)) {
-    return fail("missing_service_name", `❌ El servicio ${ref} no tiene "name".`);
+    return failInput(E.MISSING_SERVICE_NAME, { ...details, key: "name" });
   }
   if (svc.search_term !== undefined && !isNonEmptyString(svc.search_term)) {
-    return fail(
-      "invalid_search_term",
-      `❌ "search_term" del servicio ${ref} debe ser un texto no vacío.`,
-    );
+    return failInput(E.INVALID_SEARCH_TERM, { ...details, key: "search_term" });
   }
-  return validateFields(svc.fields, ref);
+  if (svc.template !== undefined && !isNonEmptyString(svc.template)) {
+    return failInput(E.INVALID_SERVICE, { ...details, key: "template" });
+  }
+  return validateFields(svc.fields, details);
 }
 
-export function parseRunInput(text) {
-  let data;
-  try {
-    data = JSON.parse(String(text ?? ""));
-  } catch {
-    return fail("invalid_json", INVALID_JSON_MESSAGE);
-  }
-  if (!isPlainObject(data))
-    return fail("not_object", '❌ El JSON debe ser un objeto con "services".');
-  const projectError = validateProject(data.project);
-  if (projectError) return projectError;
-  if (data.region !== undefined && !isNonEmptyString(data.region)) {
-    return fail("invalid_region", '❌ "region" debe ser un código de región (p. ej. us-east-1).');
-  }
-  if (!Array.isArray(data.services)) {
-    return fail("missing_services", '❌ Falta la lista "services".');
-  }
-  if (data.services.length === 0) {
-    return fail("empty_services", "❌ Sin servicios definidos.");
-  }
+// Copia solo las claves del esquema a objetos nuevos (NFR3.5).
+function copyService(svc) {
+  const copy = { name: svc.name };
+  if (svc.search_term !== undefined) copy.search_term = svc.search_term;
+  if (svc.template !== undefined) copy.template = svc.template;
+  if (svc.fields !== undefined) copy.fields = Object.fromEntries(Object.entries(svc.fields));
+  return copy;
+}
+
+function copyRunInput(data) {
+  const copy = { services: data.services.map(copyService) };
+  if (data.project !== undefined) copy.project = data.project;
+  if (data.region !== undefined) copy.region = data.region;
+  return copy;
+}
+
+// Validador común (BR2.2-BR2.7): JSON pegado y runInput del cerebro (BR3.3).
+export function parseRunInput(data) {
+  if (!isPlainObject(data)) return failInput(E.NOT_OBJECT);
+  const rootError = validateRoot(data);
+  if (rootError) return rootError;
   for (let i = 0; i < data.services.length; i++) {
     const serviceError = validateService(data.services[i], i);
     if (serviceError) return serviceError;
   }
-  return { ok: true, value: data };
+  return { ok: true, value: copyRunInput(data) };
+}
+
+// Camino JSON completo (BR2.1 + validador común). El tope de tamaño se evalúa
+// antes de parsear para acotar el costo de JSON.parse (NFR3.4).
+export function parseJsonText(text) {
+  const source = typeof text === "string" ? text : "";
+  if (source.length > MAX_JSON_CHARS) {
+    return failInput(E.INPUT_TOO_LONG, { maxLength: MAX_JSON_CHARS });
+  }
+  let data;
+  try {
+    data = JSON.parse(source);
+  } catch {
+    return failInput(E.INVALID_JSON);
+  }
+  return parseRunInput(data);
 }

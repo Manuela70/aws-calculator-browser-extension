@@ -17,7 +17,10 @@ export default defineConfig({
         "aws-calculator-extension/lib/messages.js",
         "aws-calculator-extension/lib/messages-es.js",
         "aws-calculator-extension/lib/validation.js",
+        "aws-calculator-extension/lib/input/input-schema.js",
+        "aws-calculator-extension/lib/input/input-errors.js",
         "aws-calculator-extension/lib/input/json-parser.js",
+        "aws-calculator-extension/lib/input/nl-interpreter.js",
         "aws-calculator-extension/lib/input/input-normalizer.js",
         "aws-calculator-extension/lib/mapping/region-map.js",
         "aws-calculator-extension/lib/mapping/deterministic-mapper.js",
@@ -36,6 +39,8 @@ export default defineConfig({
       ],
       thresholds: {
         lines: 80,
+        // Umbral propio de U2 sobre la capa de entrada (unit-test-instructions.md).
+        "aws-calculator-extension/lib/input/**": { lines: 80, branches: 80 },
       },
     },
   },

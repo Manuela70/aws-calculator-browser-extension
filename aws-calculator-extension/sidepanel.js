@@ -5,8 +5,9 @@
 // Seguridad: todo texto se inserta con textContent; el enlace solo si es
 // https://calculator.aws/ (BR6.5).
 
-import { parseRunInput } from "./lib/input/json-parser.js";
 import { normalize } from "./lib/input/input-normalizer.js";
+import { INPUT_ERROR_CODES } from "./lib/input/input-errors.js";
+import { INPUT_FORMATS } from "./lib/input/input-schema.js";
 import { connectToCalculator } from "./lib/connection/handshake.js";
 import { MESSAGE_TYPES, STORAGE_KEYS, makeRunRpa, makeStoredRunRecord } from "./lib/messages.js";
 import { isCalculatorUrl, isMessageForRun, isRunResult } from "./lib/validation.js";
@@ -80,6 +81,7 @@ const panel = {
   acceptedAt: 0,
   watchTimer: null,
   index: [],
+  inputController: null,
 };
 
 // ─── Presentación ─────────────────────────────────────────────────────────────
@@ -215,10 +217,17 @@ function newRunId() {
   return `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+// Cada "Generar Estimado" normaliza desde cero con su propia señal (BR5.2).
+// El puerto del cerebro es null hasta que U7 lo conecte: el camino JSON corre
+// sin revisión Well-Architected y el de lenguaje natural respondería
+// brain_unavailable (BR3.5, BR5.4).
 function validateInput() {
-  const parsed = parseRunInput(ui.input.value.trim());
-  if (!parsed.ok) return parsed;
-  return normalize(parsed.value);
+  panel.inputController?.abort();
+  panel.inputController = new AbortController();
+  return normalize(
+    { format: INPUT_FORMATS.JSON, text: ui.input.value },
+    { interpretNaturalLanguage: null, signal: panel.inputController.signal },
+  );
 }
 
 async function sendRunRequest(runRequest, tabId) {
@@ -232,10 +241,13 @@ async function sendRunRequest(runRequest, tabId) {
 
 async function startRun() {
   if (!dispatch(PANEL_EVENTS.SUBMIT)) return;
-  const input = validateInput();
+  const input = await validateInput();
   if (!input.ok) {
     dispatch(PANEL_EVENTS.INPUT_INVALID);
-    showStatus(input.error.message, "error");
+    // El texto del error lo fija input-errors.js; se pinta con textContent.
+    // Una cancelación no se muestra como error (BR3.6).
+    const isCancelled = input.error.code === INPUT_ERROR_CODES.CANCELLED;
+    showStatus(isCancelled ? "" : input.error.message, "error");
     return;
   }
   const runRequest = { runId: newRunId(), services: input.value.services };
