@@ -3,9 +3,12 @@
   "name": "AWS Calculator — Applying",
   "version": "3.0.0",
   "description": "RPA: genera estimados en AWS Pricing Calculator desde un JSON, desde el panel lateral.",
-  "minimum_chrome_version": "116",
-  "permissions": ["tabs", "scripting", "sidePanel", "storage", "unlimitedStorage"],
+  "minimum_chrome_version": "130",
+  "permissions": ["tabs", "scripting", "sidePanel", "storage", "unlimitedStorage", "identity"],
   "host_permissions": ["https://calculator.aws/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

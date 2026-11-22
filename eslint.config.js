@@ -133,6 +133,47 @@ const inputRules = {
   ],
 };
 
+// Service worker (U7, NFR5.2, NFR5.3): extiende las listas base. Sin
+// chrome.storage.local ni chrome.storage.sync directos (el token vive en
+// storage.session); fetch solo en sw/brain-client.js y sw/auth-flow.js.
+const storageSelectors = [
+  {
+    selector:
+      "MemberExpression[object.object.name='chrome'][object.property.name='storage'][property.name=/^(local|sync)$/]",
+    message:
+      "El service worker no usa chrome.storage.local/sync: el token vive en storage.session (NFR5.2).",
+  },
+];
+const serviceWorkerRules = {
+  "no-restricted-syntax": [
+    ...securityRules["no-restricted-syntax"],
+    ...storageSelectors,
+    ...selectorSyntax,
+  ],
+};
+// En flat config una regla con solo severidad conserva las opciones previas: si la
+// lista base sin fetch queda vacía, la regla se apaga para esos dos archivos.
+const networkGlobals = restrictedGlobals.filter((entry) => entry.name !== "fetch");
+const serviceWorkerNetworkRules = {
+  "no-restricted-globals": networkGlobals.length > 0 ? ["error", ...networkGlobals] : "off",
+};
+
+// Adaptador de página del cerebro (U7): sin red propia ni chrome.storage; solo mensajes.
+const brainPortRules = {
+  "no-restricted-globals": [
+    ...securityRules["no-restricted-globals"],
+    { name: "XMLHttpRequest", message: "brain-port no hace red propia: usa BRAIN_CALL (NFR5.3)." },
+  ],
+  "no-restricted-properties": [
+    ...securityRules["no-restricted-properties"],
+    {
+      object: "chrome",
+      property: "storage",
+      message: "brain-port no usa chrome.storage (NFR5.2).",
+    },
+  ],
+};
+
 // El cerebro (brain/) y su IaC (infra/) corren en Node, fuera del bundle de la
 // extensión: sí hacen red propia (Bedrock, JWKS, Cognito), así que no heredan la
 // restricción de fetch, pero mantienen el resto de las reglas de seguridad.
@@ -179,6 +220,21 @@ export default [
     rules: inputRules,
   },
   {
+    files: ["aws-calculator-extension/background.js", "aws-calculator-extension/sw/**/*.js"],
+    rules: serviceWorkerRules,
+  },
+  {
+    files: [
+      "aws-calculator-extension/sw/brain-client.js",
+      "aws-calculator-extension/sw/auth-flow.js",
+    ],
+    rules: serviceWorkerNetworkRules,
+  },
+  {
+    files: ["aws-calculator-extension/lib/connection/brain-port.js"],
+    rules: brainPortRules,
+  },
+  {
     // U5: todo el código que corre en el content script (NFR4.1, NFR5.1, NFR5.2).
     files: [
       "aws-calculator-extension/content.js",
@@ -200,7 +256,13 @@ export default [
     // U5 (NFR2.1): selectores frágiles y textos de botón solo en selectors.js.
     // Va al final del bundle para que ningún bloque anterior lo reemplace.
     files: ["aws-calculator-extension/**/*.js"],
-    ignores: ["aws-calculator-extension/lib/dom/selectors.js"],
+    // background.js y sw/** quedan fuera: su bloque (U7) ya suma estas reglas a las
+    // de almacenamiento, y este bloque las reemplazaría (NFR5.2).
+    ignores: [
+      "aws-calculator-extension/lib/dom/selectors.js",
+      "aws-calculator-extension/background.js",
+      "aws-calculator-extension/sw/**",
+    ],
     rules: {
       "no-restricted-syntax": [
         "error",

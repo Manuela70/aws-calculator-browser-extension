@@ -224,3 +224,88 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 | | | R7 | | | |
 | | | R8 | | | |
 | | | R9 | | | |
+
+## U7 — Empaquetado y cliente del cerebro
+
+Casos manuales del service worker, el login y el `.zip`. Hasta que U6 agregue el
+botón "Iniciar sesión", los mensajes del borde se envían desde la consola del
+panel lateral (clic derecho en el panel → "Inspeccionar"). Los casos con el
+cerebro desplegado requieren haber corrido `node scripts/sync-brain-config.js`
+con `infra/cdk-outputs.json` y recargado la extensión.
+
+### S8 — Carga unpacked en Chrome 130 o posterior
+
+1. `npm run check:bundle` termina en `check:bundle OK`.
+2. "Reload" de la extensión en `chrome://extensions`: sin errores en la tarjeta
+   y "service worker" activo.
+3. Los permisos de la tarjeta muestran solo calculator.aws (y, si está
+   configurado, el host del cerebro y el de Cognito); ningún CloudFront.
+
+### S9 — Módulos de `lib/**` con URL dinámica desde el content script
+
+1. Correr S1. En la consola de la pestaña de calculator.aws no aparece
+   "Failed to fetch dynamically imported module" ni errores de
+   `lib/connection/brain-port.js`.
+2. En la pestaña de Red, los módulos de `lib/` se cargan desde
+   `chrome-extension://<id dinámico>/`, distinto del id de la extensión.
+
+### S10 — Cerebro sin configurar (`brain_unavailable`)
+
+Con `sw/config.js` en `null`:
+
+1. En la consola del panel:
+   `await chrome.runtime.sendMessage({ type: "BRAIN_LOGIN" })` → `ok: false`,
+   `error.code: "brain_unavailable"`, sin abrir ventana.
+2. `await chrome.runtime.sendMessage({ type: "BRAIN_CALL", callId: "s10", operation: "interpret", body: { text: "ec2", locale: "es", schemaVersion: 1 } })`
+   → `error.code: "unauthorized"` (sin token) o `brain_unavailable`; nunca `ok: true`.
+
+### S11 — Login completo
+
+Con el cerebro desplegado y sincronizado:
+
+1. `await chrome.runtime.sendMessage({ type: "BRAIN_LOGIN" })` abre la ventana
+   de Cognito; iniciar sesión con un usuario del grupo de SE.
+2. La respuesta es `{ ok: true, expiresAt }` con `expiresAt` cerca de 1 hora.
+3. `await chrome.runtime.sendMessage({ type: "BRAIN_SESSION" })` →
+   `authenticated: true`.
+4. En la consola de la pestaña de calculator.aws,
+   `await chrome.storage.session.get(null)` falla o no muestra el token.
+
+### S12 — Login cancelado
+
+1. Enviar `BRAIN_LOGIN` dos veces seguidas y cerrar la ventana de Cognito.
+2. Ambas respuestas son `error.code: "login_cancelled"`; `BRAIN_SESSION` sigue
+   en `authenticated: false`.
+
+### S13 — Token vencido (`unauthorized`)
+
+1. Después de S11, en la consola del service worker (`chrome://extensions` →
+   "service worker") editar la sesión:
+   `const s = (await chrome.storage.session.get("brain:session"))["brain:session"]; await chrome.storage.session.set({ "brain:session": { ...s, expiresAt: Date.now() + 30000 } })`.
+2. Una corrida con residuo (o un `BRAIN_CALL` de `interpret` desde el panel)
+   responde `unauthorized` sin abrir ventanas; la corrida termina en `ERROR`
+   sin URL, nunca en `DONE`.
+
+### S14 — Cerebro caído (`brain_unavailable`)
+
+1. Con la sesión activa, apuntar `BRAIN_BASE_URL` a un origen https que no
+   responda (solo en la copia local, sin commit) y recargar.
+2. `BRAIN_CALL` responde `brain_unavailable` (o `timeout` a los 30 s); una
+   corrida con residuo termina sin `DONE`. Restaurar `sw/config.js` al terminar.
+
+### S15 — `.zip` de distribución
+
+1. `npm run package` termina en `package OK — N archivos en dist/aws-calculator-extension-<versión>.zip`.
+2. Descomprimir en una carpeta temporal: no hay `*.md`, pruebas ni archivos
+   ocultos; "Load unpacked" sobre esa carpeta carga sin errores (repetir S8).
+
+| Fecha | Versión / commit | Caso | Duración | Resultado | Notas |
+|---|---|---|---|---|---|
+| | | S8 | | | |
+| | | S9 | | | |
+| | | S10 | | | |
+| | | S11 | | | |
+| | | S12 | | | |
+| | | S13 | | | |
+| | | S14 | | | |
+| | | S15 | | | |

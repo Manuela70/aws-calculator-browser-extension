@@ -14,6 +14,8 @@
     "test:u3": "vitest run tests/u3",
     "test:u4": "vitest run tests/u4",
     "test:u5": "vitest run tests/u5",
+    "test:u7": "vitest run tests/u7",
+    "package": "node scripts/package-zip.js",
     "coverage": "vitest run --coverage",
     "check:bundle": "node scripts/check-bundle.js"
   },

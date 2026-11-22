@@ -7,14 +7,15 @@ const extensionDir = fileURLToPath(new URL("../../aws-calculator-extension/", im
 const manifest = JSON.parse(readFileSync(`${extensionDir}manifest.json`, "utf8"));
 
 describe("manifest.json", () => {
-  it("declara exactamente los permisos del skeleton (sin activeTab ni clipboardWrite)", () => {
+  it("declara exactamente los permisos usados (U7 agrega identity; sin activeTab ni clipboardWrite)", () => {
     expect([...manifest.permissions].sort()).toEqual(
-      ["scripting", "sidePanel", "storage", "tabs", "unlimitedStorage"].sort(),
+      ["identity", "scripting", "sidePanel", "storage", "tabs", "unlimitedStorage"].sort(),
     );
   });
 
-  it("declara exactamente calculator.aws como host (sin CloudFront muerto ni n8n)", () => {
-    expect(manifest.host_permissions).toEqual(["https://calculator.aws/*"]);
+  it("declara calculator.aws como host (sin CloudFront muerto ni n8n; el cerebro solo vía sw/config.js)", () => {
+    expect(manifest.host_permissions).toContain("https://calculator.aws/*");
+    expect(manifest.host_permissions.join()).not.toMatch(/cloudfront|n8n/);
     expect(
       manifest.content_scripts.every((cs) => cs.matches.join() === "https://calculator.aws/*"),
     ).toBe(true);
@@ -27,11 +28,13 @@ describe("manifest.json", () => {
     ]);
   });
 
-  it("es MV3 con versión mínima de Chrome 116 y service worker como módulo", () => {
+  it("es MV3 con versión mínima de Chrome 130, service worker como módulo y CSP explícita", () => {
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.minimum_chrome_version).toBe("116");
+    expect(manifest.minimum_chrome_version).toBe("130");
     expect(manifest.background).toEqual({ service_worker: "background.js", type: "module" });
-    expect(manifest.content_security_policy).toBeUndefined();
+    expect(manifest.content_security_policy).toEqual({
+      extension_pages: "script-src 'self'; object-src 'self'",
+    });
   });
 
   it("no tiene popup: el icono abre el panel lateral y los archivos del popup no existen", () => {

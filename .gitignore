@@ -11,6 +11,9 @@ node_modules
 coverage
 dist
 dist-ssr
+# .zip de distribución de la extensión (npm run package). infra/cdk-outputs.json SÍ se
+# versiona: solo contiene URL públicas e identificadores, sin secretos.
+*.zip
 *.local
 
 # Editor directories and files

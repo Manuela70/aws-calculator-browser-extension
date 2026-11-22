@@ -23,6 +23,7 @@ import { formatConsolePrefix } from "./log/log-format.js";
 import { runEstimate, stepToFailure } from "./rpa/orchestrator.js";
 import { buildErrorRunResult } from "./rpa/result-aggregator.js";
 import { createDomResolver } from "./dom/dom-resolver.js";
+import { createBrainPort, fromChromeRuntime } from "./connection/brain-port.js";
 
 export const DEGRADED_LOG_TEXT = "No pude guardar parte del registro técnico; la corrida sigue.";
 
@@ -35,6 +36,8 @@ export function createContentMain({
   now = () => new Date(),
   consoleApi = console,
   debugToConsole = false,
+  // Puerto del cerebro (U7): la señal de la corrida le llega por el orquestador.
+  mapResidue = null,
 }) {
   let activeRunId = null;
   let activeController = null;
@@ -104,6 +107,7 @@ export function createContentMain({
         progress: emitProgress,
         now,
         context,
+        mapResidue,
       });
     } catch (error) {
       logger.log({
@@ -178,5 +182,6 @@ export function init() {
     storage: chrome.storage.local,
     createDom: () => createDomResolver(),
     debugToConsole: readDebugFlag(),
+    mapResidue: createBrainPort({ sendMessage: fromChromeRuntime(chrome.runtime) }).mapResidue,
   });
 }

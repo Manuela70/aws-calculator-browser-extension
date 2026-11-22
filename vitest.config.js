@@ -40,6 +40,9 @@ export default defineConfig({
         "aws-calculator-extension/lib/connection/handshake.js",
         "aws-calculator-extension/lib/panel/panel-state.js",
         "aws-calculator-extension/lib/panel/heartbeat.js",
+        // U7: cliente del cerebro en el service worker y adaptador de página (NFR6.1).
+        "aws-calculator-extension/sw/**",
+        "aws-calculator-extension/lib/connection/brain-port.js",
         // Cerebro u4: lógica pura de BrainCore y servicios de dominio (NFR6.1).
         "brain/core/**",
       ],
@@ -54,6 +57,9 @@ export default defineConfig({
         // Umbral propio de U5 (NFR6.1): líneas y ramas sobre sus seis módulos de Zona A.
         "aws-calculator-extension/lib/{rpa/orchestrator,rpa/result-aggregator,rpa/retry,rpa/service-timer,dom/aria-label,dom/cascade}.js":
           { lines: 80, branches: 80 },
+        // Umbral propio de U7 (NFR6.1): líneas y ramas sobre el service worker y brain-port.
+        "aws-calculator-extension/sw/**": { lines: 80, branches: 80 },
+        "aws-calculator-extension/lib/connection/brain-port.js": { lines: 80, branches: 80 },
         // Umbral propio del cerebro: 80 % en líneas y ramas (cicd-pipeline.md, job verify).
         "brain/core/**": {
           lines: 80,

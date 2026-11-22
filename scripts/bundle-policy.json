@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "130",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["tabs", "scripting", "sidePanel", "storage", "unlimitedStorage", "identity"],
+  "fixed_host_permissions": ["https://calculator.aws/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/*", "lib/*/*"],
+      "matches": ["https://calculator.aws/*"],
+      "use_dynamic_url": true
+    }
+  ],
+  "key": null,
+  "brain_config_file": "sw/config.js",
+  "allowed_url_origins": ["https://calculator.aws"],
+  "url_scan_exempt_files": ["REVIVAL_PLAN.md", "SMOKE.md"]
+}
