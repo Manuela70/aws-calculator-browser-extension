@@ -110,6 +110,100 @@ rellena por aproximación.
 2. "Borrar" quita esa corrida de la lista; "Borrar todo" deja la lista vacía y
    el tamaño en 0 B. Ambos están deshabilitados durante una corrida.
 
+## Casos del RPA (U5)
+
+Verifican sobre el DOM vivo lo que la Zona A no puede probar: cascada de
+resolución, FIX-1 a FIX-9, plantilla, guardado confirmado solo por el banner
+verde nuevo, salida sin guardar, cancelación y Spotlight. Todos parten de un
+estimado **vacío**. En cada caso se anota la duración y se revisa que ningún
+caso de fallo muestre un enlace.
+
+Comprobación común a todos: tras terminar (bien o mal) **no queda overlay** del
+Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overlay]`).
+
+### R1 — Servicio simple canónico (EC2)
+
+1. JSON canónico de arriba ("Cargar ejemplo") → "Generar Estimado".
+2. Durante la corrida, cada campo se resalta (contorno naranja y etiqueta) antes
+   de llenarse; con "Reducir movimiento" del sistema activo, sin animación.
+3. Esperado en el panel: "✅ Estimado listo." con "Amazon EC2: guardado y
+   confirmado." y el enlace `https://calculator.aws/#/estimate?id=…`. Al abrir
+   el enlace, el estimado tiene **solo** EC2 con los cuatro valores pedidos.
+
+### R2 — Multi-servicio con toggle condicional
+
+1. JSON con EC2 y Amazon Bedrock con `"template": "Advanced estimate"` (o la
+   plantilla que ofrezca la calculadora) y un toggle de proveedor en `fields`
+   (FIX-7: el campo del proveedor solo aparece tras activarlo).
+2. Esperado: la región se fija una sola vez (en el primer formulario); la
+   plantilla se elige antes de los toggles; el progreso muestra cada servicio
+   (1/2, 2/2) y cada paso. Panel: "✅ Estimado listo." con ambos servicios
+   confirmados; el enlace abre un estimado **completo** (los dos servicios).
+
+### R3 — Servicio inexistente
+
+1. JSON con un servicio `"search_term": "Servicio Fantasma"` seguido de EC2.
+2. Esperado: el primero falla con "No encontré el servicio Servicio Fantasma en
+   la calculadora." sin abrir formulario; EC2 se procesa igual y fija la región.
+   Panel: ERROR "No todos los servicios quedaron guardados…", **sin URL**.
+
+### R4 — Campo obligatorio vacío
+
+1. Servicio cuyo formulario exige un campo que el JSON no llena (por ejemplo
+   dejar vacío un campo marcado como obligatorio).
+2. Esperado: al guardar aparece `is required`; un solo intento, sin reintentos.
+   Panel: "Falta un dato obligatorio en <servicio>: <campo>." y "Me detuve en
+   <campo>."; ERROR **sin URL**; el formulario se cierra sin guardar.
+
+### R5 — Fallo a mitad de corrida con salida sin guardar
+
+1. Tres servicios; el segundo con un valor de opción inexistente (p. ej.
+   `"Operating system": "Plan 9"`).
+2. Esperado: el segundo falla con "Ninguna opción coincide con …" (nada se elige
+   por aproximación), sale sin guardar (se vuelve a My Estimate) y el tercero se
+   procesa y confirma. Panel: ERROR con el segundo en faltantes y "Me detuve en
+   …"; **sin URL**. My Estimate muestra solo el primero y el tercero.
+3. Variante: si la salida sin guardar no se confirma en 20 s (p. ej. un modal que
+   la bloquea), el panel dice "No pude salir del formulario sin guardar; detuve
+   la corrida…" y los servicios restantes figuran como "no se procesó".
+
+### R6 — Cancelación
+
+1. Iniciar R2 y, mientras configura el segundo servicio, cancelar la corrida
+   desde el panel (mensaje `CANCEL_RPA` con el `runId`). Mientras U6 no tenga el
+   botón, desde la consola del panel lateral (clic derecho → Inspeccionar):
+   `chrome.tabs.sendMessage(<tabId>, { type: "CANCEL_RPA", runId: "<runId>" })`,
+   con el `runId` y el `tabId` del "Registro técnico" de la corrida en curso.
+2. Esperado: el RPA deja de tocar la página en segundos, sale del formulario sin
+   guardar y el panel muestra "Cancelaste la corrida; los servicios pendientes no
+   se procesaron." **sin URL**; el servicio en curso y los siguientes figuran como
+   "no se procesó".
+
+### R7 — Sustitución del cerebro
+
+1. Con el cerebro conectado (U7), pedir EC2 con un valor aproximado, p. ej.
+   `"Instance type": "t3.m"`.
+2. Esperado: si el cerebro elige una opción escaneada distinta, el servicio se
+   confirma y el panel avisa "Pediste t3.m; se usó t3.medium." Si elige
+   exactamente lo pedido, no hay aviso. Con el cerebro caído o sin sesión, el
+   servicio falla con "No reconocí el campo …" y **no** hay URL.
+
+### R8 — Servicios homónimos
+
+1. JSON con **dos** servicios EC2 (mismo `search_term`), con valores distintos.
+2. Esperado: cada guardado se confirma con su **propio** banner nuevo
+   "Successfully added Amazon EC2 estimate."; el banner del primero nunca
+   confirma el segundo. Si el segundo no muestra banner nuevo en 3 intentos:
+   "No pude confirmar que Amazon EC2 se guardó.", ERROR **sin URL**. Si ambos se
+   confirman, My Estimate tiene exactamente dos EC2 y hay enlace.
+
+### R9 — Overlay ausente tras cancelar
+
+1. Iniciar R1 y cancelar justo cuando un campo está resaltado.
+2. Esperado: el contorno y la etiqueta desaparecen al instante; en DevTools no
+   queda ningún nodo `[data-aidlc-overlay]`; un nuevo "Generar Estimado" sobre un
+   estimado vacío funciona normalmente.
+
 ## Registro de ejecuciones
 
 | Fecha | Versión / commit | Caso | Duración | Resultado | Notas |
@@ -121,3 +215,12 @@ rellena por aproximación.
 | | | S5 | | | |
 | | | S6 | | | |
 | | | S7 | | | |
+| | | R1 | | | |
+| | | R2 | | | |
+| | | R3 | | | |
+| | | R4 | | | |
+| | | R5 | | | |
+| | | R6 | | | |
+| | | R7 | | | |
+| | | R8 | | | |
+| | | R9 | | | |

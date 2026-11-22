@@ -13,6 +13,7 @@
     "test:u2": "vitest run tests/u2",
     "test:u3": "vitest run tests/u3",
     "test:u4": "vitest run tests/u4",
+    "test:u5": "vitest run tests/u5",
     "coverage": "vitest run --coverage",
     "check:bundle": "node scripts/check-bundle.js"
   },

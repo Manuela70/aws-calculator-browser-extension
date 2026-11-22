@@ -1,6 +1,10 @@
-// lib/dom/form-scanner.js — scanForm portado del v6 (FIX-1..FIX-6) con los cambios del diseño.
-// PROVISIONAL (U1, walking skeleton). Dueño final: U5. Zona B (smoke manual).
+// lib/dom/form-scanner.js — scanForm portado del v6 (FIX-1..FIX-6, FIX-8) con los cambios del diseño.
+// Dueño: U5. Zona B (smoke manual de SMOKE.md).
 // Cambios frente al v6:
+// - aria-labelledby se reconstruye con joinLabelledBy y los botones Unit se
+//   leen con parseUnitButtonLabel (Zona A, FIX-2/FIX-8).
+// - El subárbol del overlay del Spotlight ([data-aidlc-overlay]) se excluye (BR5.2).
+// - Los literales de clase de CloudScape viven en selectors.js (BR3.5).
 // - La tabla de instancias de EC2 es UN solo DomField instance_radio, con label
 //   desde el heading de la tabla (FIX-6); su caja de búsqueda y demás controles
 //   internos NO se emiten como DomField aparte (BR3.1).
@@ -8,15 +12,18 @@
 // - Devuelve además un registro label → elementos para aplicar las acciones
 //   sin volver a adivinar el elemento (los DomField no llevan referencias DOM).
 
-import { SELECTORS, UI_TEXT } from "./selectors.js";
+import { CLASS_PATTERNS, SELECTORS, UI_TEXT } from "./selectors.js";
 import {
   cleanAriaLabel,
   getText,
+  isOverlay,
   isUiChrome,
   isVisible,
   labelledByParts,
   queryAll,
 } from "./dom-utils.js";
+import { parseUnitButtonLabel } from "./aria-label.js";
+import { joinLabelledBy } from "./cascade.js";
 
 const FIELD_SUFFIXES = [
   "Value",
@@ -31,14 +38,14 @@ const FIELD_SUFFIXES = [
 ];
 const ACTION_WORDS =
   /^(save|cancel|add|delete|remove|show|hide|open|close|next|back|submit|confirm|ok|dismiss|stop|info|accept|decline|customize|preferences|feedback|agree|share|export|copy|edit|create|bulk|language)/i;
-const GENERATED_NAME = /^\d|^awsui/;
+const GENERATED_NAME = CLASS_PATTERNS.GENERATED_NAME;
 
 function firstLine(text) {
   return text.replace(/\n.*/s, "").trim();
 }
 
 // FIX-3: sección por contenedor con rol, o por el heading visible precedente.
-function resolveSection(el) {
+export function resolveSection(el) {
   for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
     const role = node.getAttribute("role");
     if (!["region", "group", "fieldset"].includes(role) && node.tagName !== "FIELDSET") continue;
@@ -111,7 +118,7 @@ function findInstanceTables() {
 }
 
 function checkboxLabel(input) {
-  let label = labelledByParts(input).join(" ");
+  let label = joinLabelledBy(labelledByParts(input));
   if (!label && input.id)
     label = getText(document.querySelector(`label[for="${CSS.escape(input.id)}"]`));
   if (!label) {
@@ -126,7 +133,7 @@ function radioOptionLabel(input) {
   const labelFor = input.id ? document.querySelector(`label[for="${CSS.escape(input.id)}"]`) : null;
   return cleanAriaLabel(
     input.getAttribute("aria-label") ||
-      labelledByParts(input).join(" ") ||
+      joinLabelledBy(labelledByParts(input)) ||
       getText(labelFor) ||
       input.value ||
       "",
@@ -142,7 +149,7 @@ function radioGroupKey(input) {
   if (ariaLabel) return cleanAriaLabel(ariaLabel);
   const parts = group ? labelledByParts(group) : [];
   if (parts.length > 0) return cleanAriaLabel(parts.join(" "));
-  const heading = group?.querySelector("legend, h2, h3, h4, [class*='awsui_heading']");
+  const heading = group?.querySelector(SELECTORS["form.radiogroupHeading"]);
   return heading ? cleanAriaLabel(getText(heading)) : resolveSection(input);
 }
 
@@ -180,7 +187,7 @@ function scanInputs(collector, isExcluded, radioGroups) {
     }
     if (type === "range") continue;
     const raw = cleanAriaLabel(
-      input.getAttribute("aria-label") || labelledByParts(input).join(" "),
+      input.getAttribute("aria-label") || joinLabelledBy(labelledByParts(input)),
     );
     if (!raw) continue;
     const { label, section: ariaSection } = splitAriaLabel(raw);
@@ -197,7 +204,7 @@ function scanSelectsAndDropdowns(collector, isExcluded) {
   for (const select of queryAll("form.selects")) {
     if (isUiChrome(select) || isExcluded(select)) continue;
     const label = cleanAriaLabel(
-      select.getAttribute("aria-label") || labelledByParts(select).join(" "),
+      select.getAttribute("aria-label") || joinLabelledBy(labelledByParts(select)),
     );
     if (!label) continue;
     const section = resolveSection(select);
@@ -213,12 +220,13 @@ function scanSelectsAndDropdowns(collector, isExcluded) {
     if (!text || text.length > 80 || ACTION_WORDS.test(text)) continue;
     const parts = labelledByParts(btn);
     const withoutValue = parts.slice(0, -1);
+    // FIX-2/FIX-8: botón Unit leído por significado (ELB y WAF ordenan distinto).
+    const unit = parseUnitButtonLabel(parts);
     let label;
     let section;
-    if (withoutValue.some((p) => p.toLowerCase() === "unit")) {
-      label = "Unit";
-      section =
-        withoutValue.filter((p) => p.toLowerCase() !== "unit").join(" ") || resolveSection(btn);
+    if (unit) {
+      label = unit.label;
+      section = unit.section || resolveSection(btn);
     } else if (withoutValue.length > 0) {
       label = cleanAriaLabel(withoutValue[withoutValue.length - 1]);
       section = withoutValue.length > 1 ? cleanAriaLabel(withoutValue[0]) : resolveSection(btn);
@@ -247,7 +255,8 @@ function scanSelectsAndDropdowns(collector, isExcluded) {
 export function scanFormFields() {
   const collector = createCollector();
   const instanceTables = findInstanceTables();
-  const isExcluded = (el) => instanceTables.some((t) => t.root.contains(el));
+  // El overlay del Spotlight nunca entra en el escaneo (BR5.2, NFR5.3).
+  const isExcluded = (el) => isOverlay(el) || instanceTables.some((t) => t.root.contains(el));
   for (const { table, root, label } of instanceTables) {
     collector.add(
       { label, section: null, type: "instance_radio" },

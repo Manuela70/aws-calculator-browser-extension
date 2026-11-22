@@ -1,7 +1,7 @@
 // Integración content-main ↔ chrome/almacenamiento (dobles) y orquestador falso.
 import { describe, it, expect, vi } from "vitest";
 import { createContentMain } from "../../aws-calculator-extension/lib/content-main.js";
-import { makeRunRpa } from "../../aws-calculator-extension/lib/messages.js";
+import { makeCancelRpa, makeRunRpa } from "../../aws-calculator-extension/lib/messages.js";
 import { createFakeChrome } from "./fake-chrome.js";
 import { createSilentConsole } from "./fake-storage.js";
 import { makeRunRequest } from "./fixtures.js";
@@ -148,5 +148,35 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     await main.whenIdle();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(consoleApi.calls.some((c) => c.level === "debug")).toBe(true);
+  });
+
+  it("CANCEL_RPA aborta solo la corrida en curso y el progreso estructurado conserva el texto (U5)", async () => {
+    let seenSignal;
+    const { chromeApi, main } = setup({
+      runEstimateFn: async (runRequest, deps) => {
+        seenSignal = deps.context.signal;
+        deps.progress({ step: "adding_service", pct: 20, text: "Configurando…", serviceCount: 1 });
+        deps.progress({ step: "mapping_pass", serviceIndex: 0, serviceCount: 1 });
+        await new Promise((resolve) => deps.context.signal.addEventListener("abort", resolve));
+        return {
+          runId: runRequest.runId,
+          status: "ERROR",
+          failureStep: "services",
+          failureDetail: "cancelled",
+          perServiceResults: [],
+          finishedAt: "2026-11-21T10:01:00.000Z",
+        };
+      },
+    });
+    main.handleMessage(makeRunRpa(makeRunRequest(), 7), OWN);
+    expect(main.handleMessage(makeCancelRpa("otra-corrida"), OWN)).toEqual({ cancelled: false });
+    expect(seenSignal.aborted).toBe(false);
+    expect(main.handleMessage(makeCancelRpa("run-test-1"), { id: "otra-ext" })).toBeNull();
+    expect(main.handleMessage(makeCancelRpa("run-test-1"), OWN)).toEqual({ cancelled: true });
+    const result = await main.whenIdle();
+    expect(result.failureDetail).toBe("cancelled");
+    const progress = chromeApi.runtime.messages.filter((m) => m.type === "PROGRESS");
+    expect(progress.at(-1)).toMatchObject({ step: "mapping_pass", pct: 20, text: "Configurando…" });
+    expect(main.handleMessage(makeCancelRpa("run-test-1"), OWN)).toEqual({ cancelled: false });
   });
 });

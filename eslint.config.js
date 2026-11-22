@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import { BUTTON_TEXTS } from "./aws-calculator-extension/lib/dom/selectors.js";
 
 // Reglas de seguridad compartidas (NFR5.4, C6): sin código dinámico, sin
 // inserción de HTML y sin red propia en el skeleton (NFR5.1).
@@ -52,6 +53,74 @@ const mappingRules = {
     },
   ],
 };
+
+// Código del content script de U5 (content.js, lib/dom/**, lib/rpa/**,
+// lib/mapping/**): NFR4.1 (sin red propia) y NFR5.1 (sin chrome.storage), más
+// document.write (NFR5.2). En flat config un bloque posterior REEMPLAZA las
+// opciones de una regla: por eso se extienden las listas base, nunca se
+// redefinen desde cero (cicd-pipeline.md de U5).
+const contentScriptGlobals = [
+  ...restrictedGlobals,
+  { name: "XMLHttpRequest", message: "El content script no hace red propia (NFR4.1)." },
+  { name: "WebSocket", message: "El content script no hace red propia (NFR4.1)." },
+  { name: "EventSource", message: "El content script no hace red propia (NFR4.1)." },
+];
+const contentScriptProperties = [
+  ...restrictedProperties,
+  { object: "self", property: "fetch", message: "Sin red propia (NFR4.1)." },
+  { object: "window", property: "XMLHttpRequest", message: "Sin red propia (NFR4.1)." },
+  {
+    object: "chrome",
+    property: "storage",
+    message: "El content script no usa chrome.storage (NFR5.1).",
+  },
+  { object: "document", property: "write", message: "Prohibido document.write (NFR5.2)." },
+];
+const contentScriptRules = {
+  "no-restricted-globals": ["error", ...contentScriptGlobals],
+  "no-restricted-properties": ["error", ...contentScriptProperties],
+};
+
+// Zona A de U5 (NFR7.1): lógica pura que no toca document ni chrome y no
+// importa nada de la Zona B.
+const ZONE_B_MODULES =
+  "(^|/)(dom-utils|dom-resolver|form-scanner|selectors|spotlight|content-main)\\.js$";
+const zoneARules = {
+  "no-restricted-globals": [
+    "error",
+    ...contentScriptGlobals,
+    { name: "document", message: "La Zona A no toca el DOM (NFR7.1)." },
+    { name: "chrome", message: "La Zona A no usa APIs chrome.* (NFR7.1)." },
+  ],
+  "no-restricted-imports": [
+    "error",
+    {
+      patterns: [
+        { regex: ZONE_B_MODULES, message: "La Zona A no importa módulos de la Zona B (NFR7.1)." },
+      ],
+    },
+  ],
+};
+
+// NFR2.1 / BR3.5: clases de CloudScape y textos de botón de calculator.aws solo
+// en lib/dom/selectors.js. Los textos salen del propio BUTTON_TEXTS.
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+const buttonTexts = [...new Set(Object.values(BUTTON_TEXTS).flat())];
+const BUTTON_TEXT_SELECTOR = `Literal[value=/^(${buttonTexts.map(escapeRegex).join("|")})$/]`;
+const selectorSyntax = [
+  {
+    selector: "Literal[raw=/awsui_/]",
+    message: "Las clases de CloudScape viven solo en lib/dom/selectors.js (NFR2.1).",
+  },
+  {
+    selector: "TemplateElement[value.raw=/awsui_/]",
+    message: "Las clases de CloudScape viven solo en lib/dom/selectors.js (NFR2.1).",
+  },
+  {
+    selector: BUTTON_TEXT_SELECTOR,
+    message: "Los textos de botón de calculator.aws viven solo en lib/dom/selectors.js (NFR2.1).",
+  },
+];
 
 // lib/input/** (U2) es lógica pura: extiende las reglas base y además prohíbe
 // red propia y APIs chrome.* (u2 NFR4.1). fetch ya viene de la lista base.
@@ -108,6 +177,37 @@ export default [
   {
     files: ["aws-calculator-extension/lib/input/**/*.js"],
     rules: inputRules,
+  },
+  {
+    // U5: todo el código que corre en el content script (NFR4.1, NFR5.1, NFR5.2).
+    files: [
+      "aws-calculator-extension/content.js",
+      "aws-calculator-extension/lib/dom/**/*.js",
+      "aws-calculator-extension/lib/rpa/**/*.js",
+      "aws-calculator-extension/lib/mapping/**/*.js",
+    ],
+    rules: contentScriptRules,
+  },
+  {
+    // U5: módulos de Zona A (NFR7.1).
+    files: [
+      "aws-calculator-extension/lib/rpa/{orchestrator,result-aggregator,retry,service-timer}.js",
+      "aws-calculator-extension/lib/dom/{aria-label,cascade}.js",
+    ],
+    rules: zoneARules,
+  },
+  {
+    // U5 (NFR2.1): selectores frágiles y textos de botón solo en selectors.js.
+    // Va al final del bundle para que ningún bloque anterior lo reemplace.
+    files: ["aws-calculator-extension/**/*.js"],
+    ignores: ["aws-calculator-extension/lib/dom/selectors.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...securityRules["no-restricted-syntax"].slice(1),
+        ...selectorSyntax,
+      ],
+    },
   },
   {
     files: ["tests/**/*.js", "scripts/**/*.js", "*.config.js"],

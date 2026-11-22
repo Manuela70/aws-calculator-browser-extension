@@ -1,5 +1,6 @@
-// content.js — Cargador clásico y delgado del content script (v7, walking skeleton U1).
-// PROVISIONAL (U1). Dueño final: U5.
+// content.js — Cargador clásico y delgado del content script (v7).
+// Dueño: U5 (desde U1). Acepta PING, RUN_RPA y CANCEL_RPA, siempre con la
+// guardia de remitente (solo la propia extensión).
 // Los content scripts del manifest no pueden ser módulos ES: este archivo solo
 // pone la guardia de carga única, registra el ÚNICO listener de mensajes,
 // responde PING con { ok, ready } y carga lib/content-main.js con import()
@@ -44,6 +45,17 @@
     if (message.type === "RUN_RPA") {
       if (state !== "ready") {
         sendResponse({ accepted: false, reason: "not_ready" });
+        return false;
+      }
+      const response = main.handleMessage(message, sender);
+      if (response) sendResponse(response);
+      return false;
+    }
+    // U5 (decisión 7): cancelar la corrida en curso. Sin módulo listo no hay
+    // corrida que cancelar.
+    if (message.type === "CANCEL_RPA") {
+      if (state !== "ready") {
+        sendResponse({ cancelled: false });
         return false;
       }
       const response = main.handleMessage(message, sender);

@@ -9,6 +9,8 @@
 import {
   MESSAGE_TYPES,
   REJECT_REASONS,
+  isCancelRpaMessage,
+  makeCancelRpaResponse,
   makePingResponse,
   makeProgressEvent,
   makeProgressMessage,
@@ -35,6 +37,7 @@ export function createContentMain({
   debugToConsole = false,
 }) {
   let activeRunId = null;
+  let activeController = null;
   let currentRun = Promise.resolve(null);
   const closedRunIds = new Set();
 
@@ -59,8 +62,12 @@ export function createContentMain({
 
   async function executeRun(runRequest, tabId) {
     const { runId } = runRequest;
-    const context = { step: "preconditions" };
+    // La señal de cancelación viaja en el contexto de la corrida (decisión 7).
+    const controller = new AbortController();
+    activeController = controller;
+    const context = { step: "preconditions", signal: controller.signal };
     let lastPct = 0;
+    let lastText = "";
     let emitProgress = () => {};
     const logger = createLogger({
       storage,
@@ -71,12 +78,19 @@ export function createContentMain({
       debugToConsole,
       onDegraded: () => emitProgress(lastPct, DEGRADED_LOG_TEXT, { logDegraded: true }),
     });
-    emitProgress = (pct, text, extra) => {
+    // Acepta el ProgressEvent estructurado del orquestador (decisión 2) o la
+    // forma de U1 (pct, text, extra). Sin texto nuevo se conserva el último.
+    emitProgress = (pctOrEvent, text, extra) => {
       if (closedRunIds.has(runId)) return;
-      const event = makeProgressEvent(runId, pct, text, extra);
+      const structured = pctOrEvent !== null && typeof pctOrEvent === "object";
+      const fields = structured ? pctOrEvent : (extra ?? {});
+      const pct = structured ? (pctOrEvent.pct ?? lastPct) : pctOrEvent;
+      const message = (structured ? pctOrEvent.text : text) ?? lastText;
+      const event = makeProgressEvent(runId, pct, message, fields);
       lastPct = event.pct;
+      lastText = event.text;
       logger.updateActiveRun(event);
-      logger.log({ level: "debug", step: context.step, event: "progress", message: text });
+      logger.log({ level: "debug", step: context.step, event: "progress", message: event.text });
       send(makeProgressMessage(event));
     };
 
@@ -109,8 +123,20 @@ export function createContentMain({
       );
     }
     activeRunId = null;
+    activeController = null;
     send(makeRunResultMessage(result));
     return result;
+  }
+
+  // CANCEL_RPA (decisión 7): aborta la señal de la corrida en curso; el
+  // orquestador sale sin guardar, limpia el overlay y termina en ERROR con los
+  // servicios restantes not_attempted. Otro runId no cancela nada.
+  function cancelRun(message) {
+    if (!isCancelRpaMessage(message) || message.runId !== activeRunId || !activeController) {
+      return makeCancelRpaResponse(false);
+    }
+    activeController.abort("cancelled");
+    return makeCancelRpaResponse(true);
   }
 
   // Devuelve la respuesta para sendResponse, o null si el mensaje se ignora.
@@ -121,6 +147,7 @@ export function createContentMain({
       return null;
     }
     if (check.type === MESSAGE_TYPES.PING) return makePingResponse("ready");
+    if (check.type === MESSAGE_TYPES.CANCEL_RPA) return cancelRun(message);
     if (check.type !== MESSAGE_TYPES.RUN_RPA) return null;
     if (activeRunId) return makeRunRpaResponse(false, REJECT_REASONS.BUSY);
     activeRunId = message.runRequest.runId;

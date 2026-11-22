@@ -95,4 +95,49 @@ describe("aggregate (BR5.1)", () => {
     );
     expect(estimateMatchesRequest(requested, undefined)).toBe(false);
   });
+
+  it("compara como multiconjunto exacto: homónimos cuentan por separado y 'contiene' no vale (U5)", () => {
+    const homonyms = [makeServiceRequest(), makeServiceRequest({ requestId: "svc-2" })];
+    expect(estimateMatchesRequest(homonyms, ["Amazon EC2", "amazon  ec2"])).toBe(true);
+    expect(estimateMatchesRequest(homonyms, ["Amazon EC2", "AWS Lambda"])).toBe(false);
+    expect(estimateMatchesRequest([makeServiceRequest()], ["Amazon EC2 (Linux)"])).toBe(false);
+    const byCalculatorName = [makeServiceRequest({ calculatorServiceName: "Amazon EC2 Linux" })];
+    expect(estimateMatchesRequest(byCalculatorName, ["Amazon EC2 Linux"])).toBe(true);
+    expect(estimateMatchesRequest(undefined, [])).toBe(false);
+  });
+
+  it("missing lista por nombre los servicios no confirmados y nunca hay DONE con faltantes (U5)", () => {
+    const failed = makeServiceResult({
+      requestId: "svc-2",
+      serviceName: "AWS Lambda",
+      status: "failed",
+      reason: "validation_required",
+      stoppedAtLabel: "Number of requests",
+    });
+    const aggregation = aggregate(twoRequests(), [makeServiceResult(), failed]);
+    expect(aggregation.missing).toEqual(["AWS Lambda"]);
+    const result = finalizeRunResult({
+      runId: "r1",
+      aggregation,
+      estimateMatches: true,
+      renameOk: true,
+      shareUrl: URL_OK,
+      now,
+    });
+    expect(result).toMatchObject({
+      status: "ERROR",
+      failureStep: "services",
+      missing: ["AWS Lambda"],
+      stoppedAtLabel: "Number of requests",
+    });
+    expect(result.estimateUrl).toBeUndefined();
+    const done = finalizeRunResult({
+      runId: "r1",
+      aggregation: aggregate([makeServiceRequest()], [makeServiceResult()]),
+      estimateMatches: true,
+      shareUrl: URL_OK,
+      now,
+    });
+    expect(done.missing).toEqual([]);
+  });
 });

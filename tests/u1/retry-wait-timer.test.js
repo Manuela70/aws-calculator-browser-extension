@@ -53,7 +53,7 @@ describe("waitFor y sleep (BR4.10)", () => {
 describe("retry (BR4.6, NFR8.4)", () => {
   it("hace como máximo 3 intentos y reporta agotado", async () => {
     const attempt = vi.fn(async () => ({ status: "retry", reason: "not_confirmed" }));
-    const result = await retry(attempt, { maxAttempts: 3 });
+    const result = await retry(attempt, { operation: "save" });
     expect(attempt).toHaveBeenCalledTimes(3);
     expect(result).toMatchObject({
       ok: false,
@@ -111,7 +111,7 @@ describe("service-timer (NFR8.6)", () => {
     const slow = new Promise((resolve) => setTimeout(() => resolve("banner tardío"), 5000));
     const race = raceWithSignal(slow, timer.signal);
     await vi.advanceTimersByTimeAsync(1000);
-    await expect(race).resolves.toEqual({ timedOut: true });
+    await expect(race).resolves.toEqual({ timedOut: true, reason: "service_timeout" });
     await vi.advanceTimersByTimeAsync(5000);
   });
 
@@ -130,9 +130,10 @@ describe("service-timer (NFR8.6)", () => {
     const controller = new AbortController();
     const failing = raceWithSignal(Promise.reject(new Error("x")), controller.signal);
     await expect(failing).resolves.toMatchObject({ timedOut: false });
-    controller.abort();
+    controller.abort("cancelled");
     await expect(raceWithSignal(new Promise(() => {}), controller.signal)).resolves.toEqual({
       timedOut: true,
+      reason: "cancelled",
     });
   });
 });

@@ -33,7 +33,13 @@ describe("orchestrator (W3/W4)", () => {
     expect(dom.calls.find((c) => c.name === "setRegion").args[0]).toBe("US East (N. Virginia)");
     expect(dom.calls.filter((c) => c.name === "applyAction")).toHaveLength(4);
     expect(names.indexOf("renameEstimate")).toBeLessThan(names.indexOf("shareEstimate"));
-    expect(progress).toHaveBeenLastCalledWith(100, "Estimado listo.");
+    // U5: el progreso es estructurado (decisión 2) y conserva pct y text.
+    expect(progress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ step: "sharing", pct: 100, text: "Estimado listo." }),
+    );
+    expect(runResult.perServiceResults[0].durationMs).toBeGreaterThanOrEqual(0);
+    expect(runResult.missing).toEqual([]);
+    expect(names).toContain("cleanup");
   });
 
   it("estimado no vacío → ERROR preconditions sin tocar el estimado", async () => {
@@ -150,7 +156,7 @@ describe("orchestrator (W3/W4)", () => {
     expect(runResult.status).toBe("ERROR");
   });
 
-  it("service_timeout: el banner tardío se ignora y no se toca más el DOM", async () => {
+  it("service_timeout: el banner tardío se ignora y solo se sale sin guardar (U5 BR2.5)", async () => {
     vi.useFakeTimers();
     const dom = createFakeDom({
       async saveService() {
@@ -167,6 +173,8 @@ describe("orchestrator (W3/W4)", () => {
     expect(runResult.perServiceResults[0].reason).toBe("service_timeout");
     expect(runResult.failureStep).toBe("services");
     expect(dom.calls.some((c) => c.name === "returnToEstimate")).toBe(false);
+    expect(dom.calls.filter((c) => c.name === "exitWithoutSave")).toHaveLength(1);
+    expect(dom.calls.filter((c) => c.name === "saveService")).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(5000);
   });
 

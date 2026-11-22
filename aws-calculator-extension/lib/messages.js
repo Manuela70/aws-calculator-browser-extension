@@ -8,6 +8,8 @@ export const MESSAGE_TYPES = Object.freeze({
   RUN_RPA: "RUN_RPA",
   PROGRESS: "PROGRESS",
   RUN_RESULT: "RUN_RESULT",
+  // U5 (decisión 7 del plan): el panel cancela la corrida en curso.
+  CANCEL_RPA: "CANCEL_RPA",
 });
 
 export const KNOWN_MESSAGE_TYPES = Object.freeze(Object.values(MESSAGE_TYPES));
@@ -55,10 +57,43 @@ function clampPct(pct) {
   return Math.min(100, Math.max(0, value));
 }
 
-// ProgressEvent (entities.md). logDegraded avisa al panel que parte del
-// registro técnico no se pudo guardar (observability-design §2).
+// CANCEL_RPA { runId }: solo para la corrida en curso (decisión 7 del plan).
+export function makeCancelRpa(runId) {
+  return { type: MESSAGE_TYPES.CANCEL_RPA, runId };
+}
+
+export function isCancelRpaMessage(message) {
+  return (
+    message !== null &&
+    typeof message === "object" &&
+    message.type === MESSAGE_TYPES.CANCEL_RPA &&
+    typeof message.runId === "string" &&
+    message.runId.trim().length > 0
+  );
+}
+
+export function makeCancelRpaResponse(cancelled) {
+  return { cancelled: cancelled === true };
+}
+
+// Campos estructurados del ProgressEvent de U5 (entities.md, decisión 2 del plan).
+const PROGRESS_FIELDS = Object.freeze([
+  "step",
+  "serviceIndex",
+  "serviceCount",
+  "label",
+  "serviceStatus",
+  "requestId",
+]);
+
+// ProgressEvent (entities.md). Conserva pct y text para el panel actual y copia
+// los campos estructurados que traiga extra. logDegraded avisa al panel que
+// parte del registro técnico no se pudo guardar (observability-design §2).
 export function makeProgressEvent(runId, pct, text, extra = {}) {
-  const event = { runId, pct: clampPct(pct), text: String(text) };
+  const event = { runId, pct: clampPct(pct), text: String(text ?? "") };
+  for (const field of PROGRESS_FIELDS) {
+    if (extra[field] !== undefined) event[field] = extra[field];
+  }
   if (extra.logDegraded === true) event.logDegraded = true;
   return event;
 }
