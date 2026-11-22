@@ -9,8 +9,16 @@
 //   setRegion(displayName), applyToggle(toggle), expandSections, scanForm,
 //   applyAction(action), saveService(serviceName), returnToEstimate,
 //   renameEstimate(name), shareEstimate → { value: url }
+// El puerto del cerebro (deps.mapResidue) es opcional: null hasta que U7 lo
+// conecte con BRAIN_CALL; sin él, un residuo hace fallar el servicio (BR3.4).
 
-import { mapDeterministic, fieldNamePart } from "../mapping/deterministic-mapper.js";
+import {
+  describeUnresolved,
+  fieldNamePart,
+  mapDeterministic,
+  toLogEntry,
+} from "../mapping/deterministic-mapper.js";
+import { resolveResidue } from "../mapping/residue-resolver.js";
 import { getRegionDisplayName } from "../mapping/region-map.js";
 import { retry } from "./retry.js";
 import { createServiceTimer, raceWithSignal } from "./service-timer.js";
@@ -114,6 +122,40 @@ async function applyActions(run, svc, actions, signal) {
   return null;
 }
 
+// M2 (reglas de U3): hasta 3 pasadas de escaneo y mapeo; las acciones nuevas de
+// cada pasada se aplican antes de volver a escanear, para que aparezcan los
+// campos condicionales. Al cerrar, M3 consulta el residuo con el puerto (si
+// hay). Devuelve { failure } o { remaining } con las acciones aún sin aplicar
+// (las de la última pasada y las del cerebro). Un residuo sin resolver es
+// field_not_recognized con el detalle "clave: motivo" (BR3.4).
+async function mapService(run, svc, signal) {
+  const startedAt = run.now().getTime();
+  let outcome = null;
+  let domFields;
+  let applied = 0;
+  for (;;) {
+    const scanned = await run.dom.scanForm({ signal });
+    if (!scanned.ok) return { failure: failedService(svc, "page_timeout", "leer el formulario") };
+    domFields = scanned.value;
+    outcome = mapDeterministic(domFields, svc.fields, outcome);
+    if (outcome.residueStatus !== "pending_passes") break;
+    const failure = await applyActions(run, svc, outcome.actions.slice(applied), signal);
+    if (failure || signal.aborted) return { failure };
+    applied = outcome.actions.length;
+  }
+  const final = await resolveResidue(
+    outcome,
+    { serviceName: svc.serviceName, domFields, requestedValues: svc.fields },
+    { mapResidue: run.mapResidue, signal },
+  );
+  const durationMs = run.now().getTime() - startedAt;
+  run.log({ step: `service:${svc.requestId}`, ...toLogEntry(final, { durationMs }) });
+  if (final.residueStatus !== "none" && final.residueStatus !== "resolved_by_brain") {
+    return { failure: failedService(svc, "field_not_recognized", describeUnresolved(final)) };
+  }
+  return { remaining: final.actions.slice(applied) };
+}
+
 // W4: un servicio. Devuelve un ServiceResult, o null si se canceló (el corte
 // lo resuelve raceWithSignal).
 async function serviceSteps(run, svc, { isFirst, signal }) {
@@ -125,17 +167,9 @@ async function serviceSteps(run, svc, { isFirst, signal }) {
   }
   const prepared = await prepareForm(run, svc, { isFirst, signal });
   if (prepared || signal.aborted) return prepared;
-  const scanned = await run.dom.scanForm({ signal });
-  if (!scanned.ok) return failedService(svc, "page_timeout", "leer el formulario");
-  const mapping = mapDeterministic(scanned.value, svc.fields);
-  if (mapping.unresolved.length > 0) {
-    return failedService(
-      svc,
-      "field_not_recognized",
-      mapping.unresolved.map((v) => v.key).join(", "),
-    );
-  }
-  const applyFailure = await applyActions(run, svc, mapping.actions, signal);
+  const mapped = await mapService(run, svc, signal);
+  if (mapped.failure || signal.aborted) return mapped.failure ?? null;
+  const applyFailure = await applyActions(run, svc, mapped.remaining, signal);
   if (applyFailure || signal.aborted) return applyFailure;
   const saveFailure = await saveWithRetries(run, svc, signal);
   if (saveFailure) return saveFailure;
@@ -265,6 +299,7 @@ export async function runEstimate(runRequest, deps) {
     progress: deps.progress ?? (() => {}),
     now: deps.now ?? (() => new Date()),
     createTimer: deps.createTimer ?? (() => createServiceTimer()),
+    mapResidue: deps.mapResidue ?? null,
     ctx: deps.context ?? { step: "preconditions" },
     pct: 5,
   };

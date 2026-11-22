@@ -51,10 +51,75 @@ describe("orchestrator (W3/W4)", () => {
     expect(runResult.failureStep).toBe("services");
     expect(runResult.perServiceResults[0]).toMatchObject({
       reason: "field_not_recognized",
-      detail: "Campo inexistente",
+      detail: "Campo inexistente: no_match; brain_unavailable (no_port)",
     });
     expect(dom.calls.some((c) => c.name === "applyAction" || c.name === "saveService")).toBe(false);
     expect(runResult.estimateUrl).toBeUndefined();
+  });
+
+  it("campo condicional: aplica la pasada 1, vuelve a escanear y mapea el campo nuevo (M2)", async () => {
+    const dom = createFakeDom();
+    const baseFields = dom.state.domFields;
+    let scans = 0;
+    dom.scanForm = async () => {
+      scans += 1;
+      dom.calls.push({ name: "scanForm" });
+      const extra = scans > 1 ? [{ label: "EBS > Provisioning IOPS io2", type: "number" }] : [];
+      return { ok: true, value: [...baseFields, ...extra] };
+    };
+    const svc = makeServiceRequest({
+      fields: [
+        { key: "Operating system", value: "Linux" },
+        { key: "Provisioning IOPS io2", value: "3000" },
+      ],
+    });
+    const { result, log } = run(dom, makeRunRequest({ services: [svc] }));
+    const runResult = await result;
+    expect(runResult.status).toBe("DONE");
+    const names = dom.calls.map((c) => c.name);
+    expect(names.filter((n) => n === "scanForm")).toHaveLength(2);
+    expect(names.indexOf("applyAction")).toBeLessThan(names.lastIndexOf("scanForm"));
+    expect(dom.calls.filter((c) => c.name === "applyAction").map((c) => c.args[0])).toEqual([
+      "Operating system",
+      "EBS > Provisioning IOPS io2",
+    ]);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "mapping_outcome", value: "none", step: "service:svc-1" }),
+    );
+  });
+
+  it("residuo resuelto por el puerto del cerebro → se aplica y se guarda; sin respuesta válida → falla", async () => {
+    const svc = makeServiceRequest({
+      fields: [
+        { key: "Operating system", value: "Linux" },
+        { key: "Cantidad de instancias", value: "2" },
+      ],
+    });
+    const mapResidue = vi.fn().mockResolvedValue({
+      actions: [
+        {
+          requestKey: "Cantidad de instancias",
+          fieldLabel: "EC2 specifications > Number of instances",
+          actionType: "fill",
+          value: "2",
+        },
+      ],
+    });
+    const dom = createFakeDom();
+    const ok = await run(dom, makeRunRequest({ services: [svc] }), { mapResidue }).result;
+    expect(ok.status).toBe("DONE");
+    expect(mapResidue).toHaveBeenCalledTimes(1);
+    expect(dom.calls.filter((c) => c.name === "applyAction")).toHaveLength(2);
+
+    const failing = createFakeDom();
+    const failed = await run(failing, makeRunRequest({ services: [svc] }), {
+      mapResidue: vi.fn().mockResolvedValue({ actions: [] }),
+    }).result;
+    expect(failed.perServiceResults[0]).toMatchObject({
+      reason: "field_not_recognized",
+      detail: "Cantidad de instancias: no_match",
+    });
+    expect(failing.calls.some((c) => c.name === "saveService")).toBe(false);
   });
 
   it("validación 'is required' → validation_required sin reintentar", async () => {

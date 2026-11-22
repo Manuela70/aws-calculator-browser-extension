@@ -3,6 +3,14 @@ import globals from "globals";
 
 // Reglas de seguridad compartidas (NFR5.4, C6): sin código dinámico, sin
 // inserción de HTML y sin red propia en el skeleton (NFR5.1).
+const restrictedGlobals = [
+  { name: "fetch", message: "El skeleton no hace llamadas de red propias (NFR5.1)." },
+];
+const restrictedProperties = [
+  { object: "window", property: "fetch", message: "Sin red propia (NFR5.1)." },
+  { object: "globalThis", property: "fetch", message: "Sin red propia (NFR5.1)." },
+];
+
 const securityRules = {
   "no-empty": ["error", { allowEmptyCatch: false }],
   "no-eval": "error",
@@ -19,16 +27,30 @@ const securityRules = {
       message: "Prohibido insertAdjacentHTML (NFR5.4).",
     },
   ],
+  "no-restricted-globals": ["error", ...restrictedGlobals],
+  "no-restricted-properties": ["error", ...restrictedProperties],
+  "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+};
+
+// Capa de mapeo de U3 (NFR4.1, NFR5.1): corre en el content script y su única
+// salida es el puerto inyectado. Extiende las listas base (sin reemplazarlas).
+const mappingRules = {
   "no-restricted-globals": [
     "error",
-    { name: "fetch", message: "El skeleton no hace llamadas de red propias (NFR5.1)." },
+    ...restrictedGlobals,
+    { name: "XMLHttpRequest", message: "La capa de mapeo no hace red propia (NFR4.1)." },
   ],
   "no-restricted-properties": [
     "error",
-    { object: "window", property: "fetch", message: "Sin red propia (NFR5.1)." },
-    { object: "globalThis", property: "fetch", message: "Sin red propia (NFR5.1)." },
+    ...restrictedProperties,
+    { object: "self", property: "fetch", message: "Sin red propia (NFR4.1)." },
+    { object: "window", property: "XMLHttpRequest", message: "Sin red propia (NFR4.1)." },
+    {
+      object: "chrome",
+      property: "storage",
+      message: "La capa de mapeo no persiste nada (NFR4.1).",
+    },
   ],
-  "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
 };
 
 // lib/input/** (U2) es lógica pura: extiende las reglas base y además prohíbe
@@ -55,6 +77,10 @@ export default [
       globals: { ...globals.browser, chrome: "readonly" },
     },
     rules: securityRules,
+  },
+  {
+    files: ["aws-calculator-extension/lib/mapping/**/*.js"],
+    rules: mappingRules,
   },
   {
     // content.js es un script clásico (los content scripts del manifest no

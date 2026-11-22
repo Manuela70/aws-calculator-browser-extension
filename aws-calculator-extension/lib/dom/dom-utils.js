@@ -20,18 +20,9 @@ export function getText(el) {
   return (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
 }
 
-// FIX-1 (portado del v6): limpia aria-labels contaminados con el placeholder
-// (CloudWatch, KMS, SageMaker, ELB).
-export function cleanAriaLabel(raw) {
-  if (!raw) return "";
-  return raw
-    .replace(/\s+Enter amount of [^$]{0,80}$/i, "")
-    .replace(/\s+Enter amount$/i, "")
-    .replace(/\s+Enter the amount$/i, "")
-    .replace(/\s+Enter a number$/i, "")
-    .replace(/\s+Enter\s+.{0,120}$/i, "")
-    .trim();
-}
+// FIX-1: cleanAriaLabel vive ahora en el módulo puro aria-label.js (U3); se
+// reexporta aquí para no romper a sus llamadores (form-scanner.js).
+export { cleanAriaLabel } from "./aria-label.js";
 
 // Texto de los elementos referenciados por aria-labelledby (ids separados por espacio).
 export function labelledByParts(el) {

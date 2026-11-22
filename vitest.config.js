@@ -25,6 +25,8 @@ export default defineConfig({
         "aws-calculator-extension/lib/mapping/region-map.js",
         "aws-calculator-extension/lib/mapping/deterministic-mapper.js",
         "aws-calculator-extension/lib/mapping/option-match.js",
+        "aws-calculator-extension/lib/mapping/residue-resolver.js",
+        "aws-calculator-extension/lib/dom/aria-label.js",
         "aws-calculator-extension/lib/rpa/retry.js",
         "aws-calculator-extension/lib/rpa/wait.js",
         "aws-calculator-extension/lib/rpa/service-timer.js",
@@ -41,6 +43,10 @@ export default defineConfig({
         lines: 80,
         // Umbral propio de U2 sobre la capa de entrada (unit-test-instructions.md).
         "aws-calculator-extension/lib/input/**": { lines: 80, branches: 80 },
+        // Umbral propio de U3 (NFR6.1): líneas y ramas sobre sus tres módulos.
+        // Vitest evalúa estos archivos solo contra este umbral.
+        "aws-calculator-extension/lib/mapping/{deterministic-mapper,option-match,residue-resolver}.js":
+          { lines: 80, branches: 80 },
       },
     },
   },
