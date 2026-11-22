@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 // La cobertura se mide agregada sobre los módulos puros de la Zona A; la Zona B
 // (lib/dom/**, content.js, content-main.js, sidepanel.js, background.js) se
 // verifica con el smoke manual de aws-calculator-extension/SMOKE.md.
+// El cerebro (brain/) y su IaC (infra/) viven fuera del bundle de la extensión.
 export default defineConfig({
   test: {
     environment: "node",
@@ -38,6 +39,8 @@ export default defineConfig({
         "aws-calculator-extension/lib/connection/handshake.js",
         "aws-calculator-extension/lib/panel/panel-state.js",
         "aws-calculator-extension/lib/panel/heartbeat.js",
+        // Cerebro u4: lógica pura de BrainCore y servicios de dominio (NFR6.1).
+        "brain/core/**",
       ],
       thresholds: {
         lines: 80,
@@ -47,6 +50,11 @@ export default defineConfig({
         // Vitest evalúa estos archivos solo contra este umbral.
         "aws-calculator-extension/lib/mapping/{deterministic-mapper,option-match,residue-resolver}.js":
           { lines: 80, branches: 80 },
+        // Umbral propio del cerebro: 80 % en líneas y ramas (cicd-pipeline.md, job verify).
+        "brain/core/**": {
+          lines: 80,
+          branches: 80,
+        },
       },
     },
   },

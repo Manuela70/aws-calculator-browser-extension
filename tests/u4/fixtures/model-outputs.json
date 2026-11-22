@@ -1,0 +1,59 @@
+{
+  "interpretValid": {
+    "status": "interpreted",
+    "runInput": {
+      "region": "us-east-1",
+      "services": [
+        {
+          "name": "S3 Standard",
+          "fields": { "S3 Standard storage": "100", "S3 Standard storage unit": "GB" }
+        }
+      ]
+    }
+  },
+  "interpretUnknownService": {
+    "status": "interpreted",
+    "runInput": {
+      "services": [{ "name": "Amazon Quantum Ledger", "fields": {} }]
+    }
+  },
+  "residueValid": {
+    "actions": [
+      {
+        "requestKey": "Storage amount",
+        "fieldLabel": "Storage > Storage amount",
+        "actionType": "fill",
+        "value": "100"
+      },
+      {
+        "requestKey": "Storage unit",
+        "fieldLabel": "Storage > Storage amount unit",
+        "actionType": "dropdown",
+        "value": "GB"
+      },
+      {
+        "requestKey": "Detailed monitoring",
+        "fieldLabel": "Monitoring > Detailed monitoring",
+        "actionType": "toggle_on",
+        "value": "on"
+      }
+    ]
+  },
+  "wafValid": {
+    "perService": [
+      {
+        "serviceIndex": 0,
+        "service": "Amazon EC2",
+        "noFindings": false,
+        "recommendations": [
+          {
+            "pillar": "Reliability",
+            "severity": "medium",
+            "text": "Distribuye las instancias en al menos dos zonas de disponibilidad."
+          }
+        ]
+      },
+      { "serviceIndex": 1, "service": "S3 Standard", "noFindings": true }
+    ]
+  }
+}

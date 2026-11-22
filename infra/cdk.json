@@ -1,0 +1,7 @@
+{
+  "app": "node bin/app.mjs",
+  "context": {
+    "costInputs": "cost-inputs.json",
+    "region": "us-east-1"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "Amazon EC2": ["maquina virtual", "maquinas virtuales", "servidor virtual", "instancia", "instancias"],
+  "S3 Standard": ["almacenamiento de objetos", "bucket"],
+  "AWS Lambda": ["funcion sin servidor", "funciones sin servidor", "funcion lambda"],
+  "Amazon Simple Queue Service (SQS)": ["cola de mensajes", "colas de mensajes"],
+  "Amazon Simple Notification Service (SNS)": ["notificaciones", "notificacion push"],
+  "Amazon DynamoDB": ["base de datos nosql", "base de datos clave valor"],
+  "Amazon RDS for MySQL": ["base de datos mysql"],
+  "Amazon RDS for PostgreSQL": ["base de datos postgresql", "base de datos postgres"],
+  "Amazon CloudFront": ["red de distribucion de contenido", "cdn"],
+  "Amazon API Gateway": ["puerta de enlace de api"],
+  "Amazon Elastic File System (EFS)": ["sistema de archivos compartido"],
+  "Amazon Virtual Private Cloud (VPC)": ["red privada virtual"],
+  "Elastic Load Balancing": ["balanceador de carga"],
+  "AWS Fargate": ["contenedores sin servidor"],
+  "Amazon Bedrock": ["modelo fundacional", "modelos fundacionales", "ia generativa"]
+}

@@ -1,0 +1,5 @@
+{
+  "Amazon EC2": "eC2Next",
+  "Data Transfer": "awsS3DataTransfer",
+  "Gateway Load Balancer": "gatewayLoadBalancer"
+}

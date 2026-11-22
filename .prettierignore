@@ -1,0 +1,3 @@
+# Salidas generadas: síntesis de CDK y cobertura.
+infra/cdk.out/
+coverage/

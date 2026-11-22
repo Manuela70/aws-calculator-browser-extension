@@ -1,0 +1,191 @@
+{
+  "version": "2026-11-21",
+  "generatedAt": "2026-11-21T12:00:00.000Z",
+  "serviceCount": 5,
+  "fieldCount": 30,
+  "status": "active",
+  "services": [
+    {
+      "serviceCode": "eC2Next",
+      "name": "Amazon EC2",
+      "canonical": true,
+      "searchKeywords": ["EC2", "virtual machine"],
+      "synonymsEs": ["maquina virtual", "instancia"],
+      "regions": ["us-east-1", "us-west-2", "sa-east-1", "eu-west-1"],
+      "templates": ["Quick estimate", "Advanced estimate"],
+      "fields": [
+        {
+          "label": "Operating system",
+          "conditional": false,
+          "template": "Quick estimate",
+          "kind": "choice",
+          "options": ["Linux", "Windows Server", "Red Hat Enterprise Linux"]
+        },
+        { "label": "Instance type", "conditional": false, "template": "Quick estimate", "kind": "complex" },
+        { "label": "Quantity", "conditional": false, "template": "Quick estimate", "kind": "quantity" },
+        { "label": "Utilization", "conditional": false, "template": "Quick estimate", "kind": "quantity" },
+        {
+          "label": "Storage for each EC2 instance",
+          "conditional": false,
+          "template": "Quick estimate",
+          "kind": "choice",
+          "options": ["General Purpose SSD (gp3)", "General Purpose SSD (gp2)", "Provisioned IOPS SSD (io2)"]
+        },
+        { "label": "Storage amount", "conditional": true, "template": "Quick estimate", "kind": "quantity" },
+        {
+          "label": "Storage amount unit",
+          "conditional": true,
+          "template": "Quick estimate",
+          "kind": "unit",
+          "options": ["KB", "MB", "GB", "TB", "PB"]
+        },
+        {
+          "label": "Operating system",
+          "conditional": false,
+          "template": "Advanced estimate",
+          "kind": "choice",
+          "options": ["Linux", "Windows Server"]
+        },
+        { "label": "Advance EC2 instance", "conditional": false, "template": "Advanced estimate", "kind": "complex" }
+      ]
+    },
+    {
+      "serviceCode": "ec2Enhancement",
+      "name": "Amazon EC2",
+      "canonical": false,
+      "searchKeywords": ["EC2 Dedicated Hosts", "Dedicated Hosts", "EC2"],
+      "synonymsEs": [],
+      "regions": ["af-south-1", "ap-east-1"],
+      "templates": [],
+      "fields": [
+        {
+          "label": "Tenancy",
+          "conditional": false,
+          "kind": "choice",
+          "options": ["Shared Instances", "Dedicated Instances", "Dedicated Hosts"]
+        },
+        { "label": "Enable monitoring", "conditional": false, "kind": "checkbox" }
+      ]
+    },
+    {
+      "serviceCode": "amazonS3Standard",
+      "name": "S3 Standard",
+      "canonical": true,
+      "searchKeywords": ["Storage", "Simple Storage Service", "bucket", "object storage", "S3"],
+      "synonymsEs": ["almacenamiento de objetos"],
+      "regions": [],
+      "templates": ["Amazon S3 Standard"],
+      "fields": [
+        { "label": "S3 Standard storage", "conditional": true, "kind": "quantity" },
+        {
+          "label": "S3 Standard storage unit",
+          "conditional": true,
+          "kind": "unit",
+          "options": ["KB", "MB", "GB", "TB", "PB"]
+        },
+        {
+          "label": "How will data be moved into S3 Standard?",
+          "conditional": false,
+          "kind": "choice",
+          "options": [
+            "The specified amount of data is already stored in S3 Standard",
+            "PUT, COPY, POST requests to S3 Standard"
+          ]
+        },
+        { "label": "S3 Standard Average Object Size", "conditional": true, "kind": "quantity" },
+        {
+          "label": "S3 Standard Average Object Size unit",
+          "conditional": true,
+          "kind": "unit",
+          "options": ["KB", "MB", "GB", "TB", "PB"]
+        },
+        { "label": "PUT, COPY, POST, LIST requests to S3 Standard", "conditional": true, "kind": "quantity" },
+        { "label": "GET, SELECT, and all other requests from S3 Standard", "conditional": true, "kind": "quantity" }
+      ]
+    },
+    {
+      "serviceCode": "aWSLambda",
+      "name": "AWS Lambda",
+      "canonical": true,
+      "searchKeywords": ["Lambda", "serverless", "function"],
+      "synonymsEs": ["funcion"],
+      "regions": [],
+      "templates": ["Lambda Function -  Include Free Tier", "Lambda Function -  Without Free Tier"],
+      "fields": [
+        {
+          "label": "Service settings > Architecture",
+          "conditional": true,
+          "template": "Lambda Function -  Include Free Tier",
+          "kind": "choice",
+          "options": ["x86", "Arm"]
+        },
+        {
+          "label": "Service settings > Number of requests",
+          "conditional": true,
+          "template": "Lambda Function -  Include Free Tier",
+          "kind": "quantity"
+        },
+        {
+          "label": "Service settings > Number of requests unit",
+          "conditional": true,
+          "template": "Lambda Function -  Include Free Tier",
+          "kind": "unit",
+          "options": ["per second", "per minute", "per hour", "per day", "per month", "million per month"]
+        },
+        {
+          "label": "Provisioned Concurrency > Architecture",
+          "conditional": true,
+          "template": "Lambda Function -  Include Free Tier",
+          "kind": "choice",
+          "options": ["x86", "Arm"]
+        },
+        {
+          "label": "Architecture",
+          "conditional": true,
+          "template": "Lambda Function -  Without Free Tier",
+          "kind": "choice",
+          "options": ["x86", "Arm"]
+        },
+        {
+          "label": "Number of requests",
+          "conditional": true,
+          "template": "Lambda Function -  Without Free Tier",
+          "kind": "quantity"
+        },
+        {
+          "label": "Number of requests unit",
+          "conditional": true,
+          "template": "Lambda Function -  Without Free Tier",
+          "kind": "unit",
+          "options": ["per second", "per minute", "per hour", "per day", "per month", "million per month"]
+        }
+      ]
+    },
+    {
+      "serviceCode": "amazonSimpleQueueService",
+      "name": "Amazon Simple Queue Service (SQS)",
+      "canonical": true,
+      "searchKeywords": ["Messaging", "SQS", "queue service", "message queueing"],
+      "synonymsEs": ["cola de mensajes"],
+      "regions": [],
+      "templates": ["Amazon Simple Queue Service"],
+      "fields": [
+        { "label": "Standard queue requests", "conditional": false, "kind": "quantity" },
+        {
+          "label": "Standard queue requests unit",
+          "conditional": false,
+          "kind": "unit",
+          "options": ["million per day", "million per week", "million per month"]
+        },
+        { "label": "FIFO queue requests", "conditional": false, "kind": "quantity" },
+        {
+          "label": "FIFO queue requests unit",
+          "conditional": false,
+          "kind": "unit",
+          "options": ["million per day", "million per week", "million per month"]
+        },
+        { "label": "Data Transfer", "conditional": false, "kind": "complex" }
+      ]
+    }
+  ]
+}

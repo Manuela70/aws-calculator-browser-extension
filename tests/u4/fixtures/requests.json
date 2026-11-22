@@ -1,0 +1,38 @@
+{
+  "interpret": {
+    "text": "Un bucket S3 Standard de 100 GB en la región us-east-1",
+    "locale": "es",
+    "schemaVersion": 1
+  },
+  "mapResidue": {
+    "service": "Amazon EC2",
+    "domFields": [
+      { "label": "Storage > Storage amount", "section": "Storage", "type": "number" },
+      {
+        "label": "Storage > Storage amount unit",
+        "section": "Storage",
+        "type": "dropdown",
+        "options": ["GB", "TB"]
+      },
+      { "label": "Monitoring > Detailed monitoring", "section": "Monitoring", "type": "toggle" },
+      { "label": "Enable monitoring", "type": "checkbox" }
+    ],
+    "requestedValues": [
+      { "key": "Storage amount", "value": "100" },
+      { "key": "Storage unit", "value": "GiB" },
+      { "key": "Detailed monitoring", "value": "on" }
+    ],
+    "unresolved": [
+      { "key": "Storage amount", "value": "100" },
+      { "key": "Storage unit", "value": "GiB" },
+      { "key": "Detailed monitoring", "value": "on" }
+    ]
+  },
+  "waf": {
+    "phase": "pre_fill",
+    "services": [
+      { "name": "Amazon EC2", "config": { "Operating system": "Linux", "Quantity": "2" } },
+      { "name": "S3 Standard", "config": { "S3 Standard storage": "100" } }
+    ]
+  }
+}

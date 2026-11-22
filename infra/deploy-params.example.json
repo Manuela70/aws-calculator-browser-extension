@@ -1,0 +1,11 @@
+{
+  "_nota": "Valores de ejemplo solo para cdk synth local y pruebas. Copia a deploy-params.json (no versionado) con los datos reales del mantenedor.",
+  "brainDomain": "brain.example.org",
+  "hostedZoneId": "Z0000000000000EXAMPLE",
+  "hostedZoneName": "example.org",
+  "alarmEmail": "mantenedor@example.org",
+  "extensionId": "abcdefghijklmnopabcdefghijklmnop",
+  "cognitoDomainPrefix": "brain-example",
+  "githubRepo": "example-org/aws-calculator-extension",
+  "imageTag": "example"
+}

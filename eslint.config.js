@@ -64,9 +64,26 @@ const inputRules = {
   ],
 };
 
+// El cerebro (brain/) y su IaC (infra/) corren en Node, fuera del bundle de la
+// extensión: sí hacen red propia (Bedrock, JWKS, Cognito), así que no heredan la
+// restricción de fetch, pero mantienen el resto de las reglas de seguridad.
+const serverSecurityRules = Object.fromEntries(
+  Object.entries(securityRules).filter(
+    ([name]) => name !== "no-restricted-globals" && name !== "no-restricted-properties",
+  ),
+);
+
 export default [
   {
-    ignores: ["node_modules/**", "coverage/**", "aidlc/**", ".claude/**", ".kiro/**"],
+    ignores: [
+      "**/node_modules/**",
+      "coverage/**",
+      "aidlc/**",
+      ".claude/**",
+      ".kiro/**",
+      ".aidlc/**",
+      "infra/cdk.out/**",
+    ],
   },
   js.configs.recommended,
   {
@@ -100,5 +117,14 @@ export default [
       globals: { ...globals.node },
     },
     rules: securityRules,
+  },
+  {
+    files: ["brain/**/*.{js,mjs}", "infra/**/*.{js,mjs}"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+    rules: serverSecurityRules,
   },
 ];

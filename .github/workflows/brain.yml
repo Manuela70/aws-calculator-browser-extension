@@ -1,0 +1,191 @@
+# Verificación y despliegue del cerebro u4-mapping-brain
+# (infrastructure-design/cicd-pipeline.md). Un solo entorno (prod) en us-east-1.
+# Identidad: OIDC con dos roles (github-brain-build y github-brain-deploy); ningún
+# secreto guardado en GitHub. Las variables del repositorio solo guardan datos no
+# secretos: cuenta, región, ARN de los roles, dominio, hosted zone, correo de alarmas.
+name: brain
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "brain/**"
+      - "infra/**"
+      - "tests/u4/**"
+      - ".github/workflows/brain.yml"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Etiqueta de imagen ya publicada en ECR para redesplegar (rollback). Vacío = construir la del commit."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brain-deploy
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22
+  GITLEAKS_VERSION: 8.21.2
+  IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+  CDK_CONTEXT: >-
+    -c account=${{ vars.AWS_ACCOUNT_ID }}
+    -c region=${{ vars.AWS_REGION }}
+    -c costInputs=cost-inputs.json
+    -c brainDomain=${{ vars.BRAIN_DOMAIN }}
+    -c hostedZoneId=${{ vars.HOSTED_ZONE_ID }}
+    -c hostedZoneName=${{ vars.HOSTED_ZONE_NAME }}
+    -c alarmEmail=${{ vars.ALARM_EMAIL }}
+    -c extensionId=${{ vars.EXTENSION_ID }}
+    -c cognitoDomainPrefix=${{ vars.COGNITO_DOMAIN_PREFIX }}
+    -c githubRepo=${{ github.repository }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      # Acciones oficiales fijadas por SHA de commit (tag entre comentarios), como en ci.yml.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            brain/package-lock.json
+            infra/package-lock.json
+      - name: Instalar dependencias (raíz, brain, infra)
+        run: |
+          npm ci
+          npm ci --prefix brain
+          npm ci --prefix infra
+      - name: Escaneo de secretos (gitleaks, binario verificado por SHA-256)
+        env:
+          GITLEAKS_SHA256: ${{ vars.GITLEAKS_SHA256 }}
+        run: |
+          if [ -z "$GITLEAKS_SHA256" ]; then
+            echo "Falta la variable GITLEAKS_SHA256 (suma publicada para gitleaks ${GITLEAKS_VERSION} linux_x64)." >&2
+            exit 1
+          fi
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks detect --source . --redact --no-banner
+      - name: Lint
+        run: npm run lint
+      - name: Pruebas del cerebro con umbral de 80 % (líneas y ramas) sobre brain/core
+        run: npx vitest run tests/u4 --coverage --coverage.include="brain/core/**"
+      - name: Síntesis de CDK con entradas de ejemplo (sin credenciales)
+        working-directory: infra
+        run: >-
+          npx cdk synth --no-notices --quiet --no-lookups
+          -c account=111111111111 -c region=us-east-1
+          -c costInputs=cost-inputs.example.json -c params=deploy-params.example.json
+
+  image:
+    needs: verify
+    if: ${{ inputs.image_tag == '' }}
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Credenciales temporales (github-brain-build)
+        run: bash infra/scripts/gha-assume-role.sh "${{ vars.BRAIN_BUILD_ROLE_ARN }}" "${{ vars.AWS_REGION }}"
+      - name: Construir y publicar la imagen ARM64 (etiqueta = SHA de git)
+        env:
+          REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+          docker build --platform linux/arm64 -t "$REGISTRY/brain-api:$IMAGE_TAG" brain/
+          docker push "$REGISTRY/brain-api:$IMAGE_TAG"
+      - name: Esperar el escaneo de ECR y bloquear hallazgos críticos o altos
+        run: |
+          aws ecr wait image-scan-complete --repository-name brain-api --image-id imageTag="$IMAGE_TAG"
+          counts=$(aws ecr describe-image-scan-findings --repository-name brain-api \
+            --image-id imageTag="$IMAGE_TAG" --query 'imageScanFindings.findingSeverityCounts' --output json)
+          echo "Hallazgos: $counts"
+          critical=$(echo "$counts" | jq '(.CRITICAL // 0) + (.HIGH // 0)')
+          if [ "$critical" -gt 0 ]; then
+            echo "La imagen tiene hallazgos críticos o altos." >&2
+            exit 1
+          fi
+
+  diff:
+    needs: [verify, image]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --prefix infra
+      - name: Credenciales temporales (github-brain-build)
+        run: bash infra/scripts/gha-assume-role.sh "${{ vars.BRAIN_BUILD_ROLE_ARN }}" "${{ vars.AWS_REGION }}"
+      - name: cdk diff (informativo para el aprobador)
+        working-directory: infra
+        run: |
+          npx cdk diff BrainStack --no-notices $CDK_CONTEXT -c imageTag="$IMAGE_TAG" 2>&1 | tee diff.txt
+          {
+            echo "## cdk diff de BrainStack (imagen $IMAGE_TAG)"
+            echo '```'
+            cat diff.txt
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: diff
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --prefix infra
+      - name: Credenciales temporales (github-brain-deploy)
+        run: bash infra/scripts/gha-assume-role.sh "${{ vars.BRAIN_DEPLOY_ROLE_ARN }}" "${{ vars.AWS_REGION }}"
+      - name: cdk deploy (la aprobación ya ocurrió en el entorno production)
+        working-directory: infra
+        run: npx cdk deploy BrainStack --no-notices --require-approval never $CDK_CONTEXT -c imageTag="$IMAGE_TAG"
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Credenciales temporales (github-brain-deploy)
+        run: bash infra/scripts/gha-assume-role.sh "${{ vars.BRAIN_DEPLOY_ROLE_ARN }}" "${{ vars.AWS_REGION }}"
+      - name: Invocar la sonda una vez y exigir ProbeSuccess = 1
+        run: |
+          aws lambda invoke --function-name brain-probe --cli-binary-format raw-in-base64-out \
+            --payload '{}' probe.json >/dev/null
+          cat probe.json
+          test "$(jq -r '.success' probe.json)" = "true"
+      - name: Verificar 2 tareas en ejecución y despliegue completo
+        run: |
+          service=$(aws ecs describe-services --cluster brain --services brain-api --output json)
+          running=$(echo "$service" | jq '.services[0].runningCount')
+          rollout=$(echo "$service" | jq -r '.services[0].deployments[] | select(.status == "PRIMARY") | .rolloutState')
+          echo "Tareas en ejecución: $running; despliegue: $rollout"
+          test "$running" -eq 2
+          test "$rollout" = "COMPLETED"

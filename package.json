@@ -5,13 +5,14 @@
   "description": "Tooling de desarrollo (tests, lint, formato) de la extensión AWS Calculator. No participa en la carga unpacked.",
   "type": "module",
   "scripts": {
-    "lint": "eslint aws-calculator-extension tests scripts",
-    "format": "prettier --write \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
-    "format:check": "prettier --check \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
+    "lint": "eslint aws-calculator-extension tests scripts brain infra",
+    "format": "prettier --write \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"brain/**/*.{js,mjs}\" \"infra/**/*.mjs\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
+    "format:check": "prettier --check \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"brain/**/*.{js,mjs}\" \"infra/**/*.mjs\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
     "test": "vitest run",
     "test:u1": "vitest run tests/u1",
     "test:u2": "vitest run tests/u2",
     "test:u3": "vitest run tests/u3",
+    "test:u4": "vitest run tests/u4",
     "coverage": "vitest run --coverage",
     "check:bundle": "node scripts/check-bundle.js"
   },

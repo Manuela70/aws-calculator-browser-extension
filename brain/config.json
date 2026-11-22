@@ -1,0 +1,44 @@
+{
+  "model": {
+    "modelId": "anthropic.claude-3-5-haiku-20241022-v1:0",
+    "region": "us-east-1",
+    "anthropicVersion": "bedrock-2023-05-31",
+    "maxTokens": {
+      "interpret": 1200,
+      "map_residue": 600,
+      "waf_evaluate": 2200
+    }
+  },
+  "timing": {
+    "opDeadlineMs": 25000,
+    "initDeadlineMs": 4000,
+    "attemptTimeoutMs": 10000,
+    "minSecondAttemptMs": 6000,
+    "retryBackoffMinMs": 1000,
+    "retryBackoffMaxMs": 2000,
+    "secondAttemptMarginMs": 2000,
+    "inventoryReloadMs": 300000,
+    "inventoryStartupRetryMs": 30000,
+    "jwksRefreshMs": 3600000,
+    "jwksUnknownKidMinIntervalMs": 300000,
+    "usageStoreTimeoutMs": 50,
+    "clockToleranceSec": 60
+  },
+  "concurrency": {
+    "maxInstances": 2,
+    "globalInFlight": 15,
+    "wafBatchSize": 5,
+    "initialLatencyMs": 6000,
+    "latencyWindow": 50
+  },
+  "usage": {
+    "perMinute": 60,
+    "probePerMinute": 2,
+    "rateLimitedRetryAfterSeconds": 5
+  },
+  "inventory": {
+    "staleAfterDays": 14,
+    "maxBytes": 52428800,
+    "maxLossRatio": 0.1
+  }
+}

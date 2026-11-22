@@ -1,0 +1,3 @@
+cdk.out/
+# Parámetros reales del despliegue (correo del mantenedor, dominio): no se versionan.
+deploy-params.json
