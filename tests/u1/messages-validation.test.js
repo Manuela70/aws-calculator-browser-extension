@@ -85,9 +85,15 @@ describe("mensajes del panel y forma de RunResult", () => {
     );
   });
 
-  it("acota pct a 0-100 y responde PING según el estado del módulo", () => {
-    expect(makeProgressEvent("r1", 140, "x").pct).toBe(100);
-    expect(makeProgressEvent("r1", "abc", "x").pct).toBe(0);
+  it("el progreso lleva solo campos estructurados y PING responde según el módulo", () => {
+    expect(
+      makeProgressEvent("r1", { step: "saving", serviceIndex: 0, pct: 140, text: "x", extra: 1 }),
+    ).toEqual({ runId: "r1", step: "saving", serviceIndex: 0 });
+    expect(makeProgressEvent("r1", { logDegraded: true })).toEqual({
+      runId: "r1",
+      logDegraded: true,
+    });
+    expect(makeProgressEvent("r1")).toEqual({ runId: "r1" });
     expect(makePingResponse("ready")).toEqual({ ok: true, ready: true });
     expect(makePingResponse("loading")).toEqual({ ok: true, ready: false });
     expect(makePingResponse("failed")).toEqual({ ok: false, ready: false });

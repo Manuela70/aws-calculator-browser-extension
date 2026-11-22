@@ -174,6 +174,79 @@ const brainPortRules = {
   ],
 };
 
+// Panel lateral de U6 (sidepanel.js y lib/panel/**; NFR5.1, NFR5.4, NFR5.5;
+// decisión 12 del plan). Extiende las listas base y suma selectorSyntax, porque
+// el bloque final de U5 lo excluye para no borrarle estas prohibiciones: sin
+// red propia, sin chrome.storage.local/sync (el historial va por
+// lib/history-store.js), chrome.storage.session solo en tab-store.js, sin
+// estilos en línea, sin manejadores on* asignados y setAttribute solo con
+// nombre literal.
+const panelGlobals = [
+  ...restrictedGlobals,
+  {
+    name: "XMLHttpRequest",
+    message: "El panel no hace red propia: usa el service worker (NFR5.5).",
+  },
+  { name: "WebSocket", message: "El panel no hace red propia (NFR5.5)." },
+  { name: "EventSource", message: "El panel no hace red propia (NFR5.5)." },
+];
+const panelProperties = [
+  ...restrictedProperties,
+  { object: "self", property: "fetch", message: "El panel no hace red propia (NFR5.5)." },
+  {
+    object: "window",
+    property: "XMLHttpRequest",
+    message: "El panel no hace red propia (NFR5.5).",
+  },
+  { object: "document", property: "write", message: "Prohibido document.write (NFR5.1)." },
+];
+const panelSyntax = [
+  ...securityRules["no-restricted-syntax"].slice(1),
+  ...selectorSyntax,
+  {
+    selector: "MemberExpression[object.property.name='storage'][property.name=/^(local|sync)$/]",
+    message:
+      "El panel no usa chrome.storage.local/sync: el historial se lee por lib/history-store.js (NFR5.4).",
+  },
+  {
+    selector: "MemberExpression[property.name='style']",
+    message: "Sin estilos en línea: los estilos cambian solo con clases fijas (NFR5.1).",
+  },
+  {
+    selector: "AssignmentExpression[left.type='MemberExpression'][left.property.name=/^on[a-z]+$/]",
+    message: "Sin manejadores on* asignados: usar addEventListener (NFR5.1).",
+  },
+  {
+    selector: "CallExpression[callee.property.name='setAttribute'][arguments.0.type!='Literal']",
+    message: "setAttribute solo con un nombre de atributo literal (NFR5.1).",
+  },
+];
+const panelSessionSyntax = {
+  selector: "MemberExpression[object.property.name='storage'][property.name='session']",
+  message:
+    "Solo lib/panel/tab-store.js usa chrome.storage.session; el panel nunca lee el token (NFR5.4, NFR5.5).",
+};
+const panelRules = {
+  "no-restricted-globals": ["error", ...panelGlobals],
+  "no-restricted-properties": ["error", ...panelProperties],
+  "no-restricted-syntax": ["error", ...panelSyntax, panelSessionSyntax],
+};
+// tab-store.js: mismas reglas del panel salvo chrome.storage.session.
+const panelTabStoreRules = { "no-restricted-syntax": ["error", ...panelSyntax] };
+// Zona A del panel (NFR6.1): sin document ni chrome.
+const panelZoneARules = {
+  "no-restricted-globals": [
+    "error",
+    ...panelGlobals,
+    { name: "document", message: "La Zona A del panel no toca el DOM (NFR6.1)." },
+    { name: "chrome", message: "La Zona A del panel no usa APIs chrome.* (NFR6.1)." },
+  ],
+};
+const PANEL_ZONE_A_FILES = [
+  "aws-calculator-extension/lib/panel/{panel-state,url-check,history-model,timers,session-rule,waf-model,heartbeat}.js",
+  "aws-calculator-extension/lib/messages-es.js",
+];
+
 // El cerebro (brain/) y su IaC (infra/) corren en Node, fuera del bundle de la
 // extensión: sí hacen red propia (Bedrock, JWKS, Cognito), así que no heredan la
 // restricción de fetch, pero mantienen el resto de las reglas de seguridad.
@@ -253,15 +326,33 @@ export default [
     rules: zoneARules,
   },
   {
+    // U6: panel lateral (NFR5.1, NFR5.4, NFR5.5).
+    files: ["aws-calculator-extension/sidepanel.js", "aws-calculator-extension/lib/panel/**/*.js"],
+    rules: panelRules,
+  },
+  {
+    // U6: único módulo del panel con chrome.storage.session (claves panel:).
+    files: ["aws-calculator-extension/lib/panel/tab-store.js"],
+    rules: panelTabStoreRules,
+  },
+  {
+    // U6: Zona A del panel (NFR6.1).
+    files: PANEL_ZONE_A_FILES,
+    rules: panelZoneARules,
+  },
+  {
     // U5 (NFR2.1): selectores frágiles y textos de botón solo en selectors.js.
     // Va al final del bundle para que ningún bloque anterior lo reemplace.
     files: ["aws-calculator-extension/**/*.js"],
     // background.js y sw/** quedan fuera: su bloque (U7) ya suma estas reglas a las
-    // de almacenamiento, y este bloque las reemplazaría (NFR5.2).
+    // de almacenamiento, y este bloque las reemplazaría (NFR5.2). Lo mismo
+    // sidepanel.js y lib/panel/** (U6, decisión 12), cuyo bloque ya suma selectorSyntax.
     ignores: [
       "aws-calculator-extension/lib/dom/selectors.js",
       "aws-calculator-extension/background.js",
       "aws-calculator-extension/sw/**",
+      "aws-calculator-extension/sidepanel.js",
+      "aws-calculator-extension/lib/panel/**",
     ],
     rules: {
       "no-restricted-syntax": [

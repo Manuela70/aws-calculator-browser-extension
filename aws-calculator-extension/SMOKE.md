@@ -44,7 +44,7 @@ Es el mismo que carga el botón "Cargar ejemplo (EC2 t3.micro)":
 ```
 
 Si alguna etiqueta no coincide con el formulario vivo de EC2 (riesgo P2), la
-corrida termina en ERROR con "No reconocí el campo … en Amazon EC2." y sin URL.
+corrida termina en ERROR con "Hay campos que no pude reconocer: …" y sin URL.
 Eso es el comportamiento correcto: ajustar la etiqueta del JSON canónico (aquí y
 en `sidepanel.js`) a la que muestra el formulario y volver a correr; nunca se
 rellena por aproximación.
@@ -54,11 +54,12 @@ rellena por aproximación.
 ### S1 — Caso canónico sobre un estimado vacío (≤ 3 min)
 
 1. Abrir `https://calculator.aws/#/estimate` con un estimado **vacío**.
-2. Panel → "Cargar ejemplo" → "Generar Estimado".
+2. Panel → "Cargar ejemplo" → "Generar Estimado" → en la vista previa,
+   "Generar en calculator.aws" (o "Revisar y generar" con el cerebro).
 3. Esperado:
-   - El progreso avanza (conectar, configurar EC2, cada campo, intentos de
-     guardado, verificación, renombrado, enlace).
-   - Resultado "✅ Estimado listo." con "Amazon EC2: guardado y confirmado." y un
+   - El progreso avanza ("Servicio 1 de 1"; en la fila: agregar, llenar cada
+     campo, guardar; luego revisar el estimado, renombrar y obtener el enlace).
+   - Resultado "Estimado listo." con "Amazon EC2: Guardado y confirmado" y un
      enlace `https://calculator.aws/…`.
    - Abrir el enlace en otra ventana: el estimado se llama **"Skeleton EC2"** y
      contiene **solo** el servicio EC2 (t3.micro, Linux, 1 instancia, On-Demand).
@@ -68,29 +69,31 @@ rellena por aproximación.
 
 1. Vaciar el estimado (o abrir uno nuevo).
 2. Pegar el JSON canónico añadiendo en `fields` `"Campo inexistente": "1"`.
-3. Esperado: ERROR con "No todos los servicios quedaron guardados…" y la línea
-   "No reconocí el campo Campo inexistente en Amazon EC2."; **sin URL** y sin
-   guardar el servicio.
+3. Esperado: "No se generó el estimado." con "Algunos servicios no se
+   completaron." y la línea "Amazon EC2: Hay campos que no pude reconocer:
+   Campo inexistente…"; **sin URL** y sin guardar el servicio.
 
 ### S3 — Estimado con servicios previos
 
 1. Con el estimado de S1 todavía abierto (ya tiene EC2), correr el JSON canónico.
-2. Esperado: ERROR "El estimado abierto ya tiene servicios. Vacíalo o abre uno
-   nuevo…", **sin URL**, y el estimado existente queda intacto.
+2. Esperado: "El estimado de calculator.aws no está vacío. Ábrelo en una pestaña
+   nueva y vuelve a intentar.", **sin URL**, con "Reintentar" visible, y el
+   estimado existente queda intacto.
 
 ### S4 — Cerrar y reabrir el panel a mitad de corrida
 
 1. Iniciar S1 sobre un estimado vacío; mientras configura EC2, cerrar el panel.
-2. Reabrir el panel (icono): debe mostrar la corrida en curso y su último
-   progreso, o su resultado si ya terminó ("Resultado de la corrida" / "Última
-   corrida").
+2. Reabrir el panel (icono): si la corrida sigue, muestra "Servicio N de M" con
+   su último progreso; si ya terminó, abre en reposo y el resultado solo está
+   dentro de "Última corrida", plegada (AC6.3.1).
 
 ### S5 — Cerrar la pestaña de calculator.aws a mitad de corrida
 
 1. Iniciar S1; mientras configura EC2, cerrar la pestaña de `calculator.aws`.
-2. Esperado: en **≤ 60 s** el panel muestra "La corrida dejó de responder…" y el
-   botón vuelve a estar habilitado.
-3. En "Registro técnico" la corrida aparece como **interrumpida**; al
+2. Esperado: en **≤ 60 s** el panel muestra "La corrida dejó de responder.
+   Revisa la pestaña de calculator.aws. Abre un estimado nuevo en
+   calculator.aws y vuelve a generar." y "Volver" devuelve la entrada.
+3. En "Historial de corridas" la corrida aparece como **Interrumpida**; al
    exportarla, las entradas llegan en orden (`seq` consecutivo) hasta el corte.
 
 ### S6 — Carga fallida del módulo
@@ -98,17 +101,19 @@ rellena por aproximación.
 1. En `chrome://extensions`, con la extensión cargada, renombrar temporalmente
    `lib/content-main.js` (p. ej. a `content-main.js.bak`) y pulsar "Reload".
 2. Recargar la pestaña de `calculator.aws` y correr el JSON canónico.
-3. Esperado: ERROR "No pude cargar la extensión en calculator.aws. Recarga la
-   pestaña de calculator.aws y vuelve a intentar." (consola de la pestaña:
+3. Esperado: error de conexión "No pude cargar la extensión en calculator.aws.
+   Recarga la pestaña de calculator.aws y vuelve a intentar." con "Reintentar" y
+   "Volver" (consola de la pestaña:
    `[aws-calc] loader No se pudo cargar lib/content-main.js`).
 4. Restaurar el nombre del archivo, "Reload" de la extensión y recargar la pestaña.
 
 ### S7 — Registro técnico: exportar y borrar
 
-1. "Exportar" en una corrida descarga `aws-calc-<runId>.json` con
+1. Desplegar "Historial de corridas". "Exportar" en una corrida descarga `aws-calc-<runId>.json` con
    `{ runId, index, entries }`; sin credenciales ni tokens.
-2. "Borrar" quita esa corrida de la lista; "Borrar todo" deja la lista vacía y
-   el tamaño en 0 B. Ambos están deshabilitados durante una corrida.
+2. "Borrar" quita esa corrida de la lista; "Borrar todo" deja la lista vacía
+   ("Todavía no hay corridas registradas."). Ambos están deshabilitados durante
+   una corrida.
 
 ## Casos del RPA (U5)
 
@@ -126,9 +131,10 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 1. JSON canónico de arriba ("Cargar ejemplo") → "Generar Estimado".
 2. Durante la corrida, cada campo se resalta (contorno naranja y etiqueta) antes
    de llenarse; con "Reducir movimiento" del sistema activo, sin animación.
-3. Esperado en el panel: "✅ Estimado listo." con "Amazon EC2: guardado y
-   confirmado." y el enlace `https://calculator.aws/#/estimate?id=…`. Al abrir
-   el enlace, el estimado tiene **solo** EC2 con los cuatro valores pedidos.
+3. Esperado en el panel: "Estimado listo." con "Amazon EC2: Guardado y
+   confirmado" y el enlace `https://calculator.aws/#/estimate?id=…` con
+   "Copiar URL". Al abrir el enlace, el estimado tiene **solo** EC2 con los
+   cuatro valores pedidos.
 
 ### R2 — Multi-servicio con toggle condicional
 
@@ -137,47 +143,49 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
    (FIX-7: el campo del proveedor solo aparece tras activarlo).
 2. Esperado: la región se fija una sola vez (en el primer formulario); la
    plantilla se elige antes de los toggles; el progreso muestra cada servicio
-   (1/2, 2/2) y cada paso. Panel: "✅ Estimado listo." con ambos servicios
+   ("Servicio 1 de 2", "Servicio 2 de 2") y cada paso en su fila. Panel:
+   "Estimado listo." con ambos servicios
    confirmados; el enlace abre un estimado **completo** (los dos servicios).
 
 ### R3 — Servicio inexistente
 
 1. JSON con un servicio `"search_term": "Servicio Fantasma"` seguido de EC2.
-2. Esperado: el primero falla con "No encontré el servicio Servicio Fantasma en
-   la calculadora." sin abrir formulario; EC2 se procesa igual y fija la región.
-   Panel: ERROR "No todos los servicios quedaron guardados…", **sin URL**.
+2. Esperado: el primero falla con "No encontré el servicio en el catálogo de la
+   calculadora." sin abrir formulario; EC2 se procesa igual y fija la región.
+   Panel: "Algunos servicios no se completaron. Abre un estimado nuevo antes de
+   volver a generar.", **sin URL** y sin "Reintentar".
 
 ### R4 — Campo obligatorio vacío
 
 1. Servicio cuyo formulario exige un campo que el JSON no llena (por ejemplo
    dejar vacío un campo marcado como obligatorio).
 2. Esperado: al guardar aparece `is required`; un solo intento, sin reintentos.
-   Panel: "Falta un dato obligatorio en <servicio>: <campo>." y "Me detuve en
-   <campo>."; ERROR **sin URL**; el formulario se cierra sin guardar.
+   Panel: "La calculadora pide completar un campo obligatorio: <campo>." y "Me
+   detuve en <campo>."; ERROR **sin URL**; el formulario se cierra sin guardar.
 
 ### R5 — Fallo a mitad de corrida con salida sin guardar
 
 1. Tres servicios; el segundo con un valor de opción inexistente (p. ej.
    `"Operating system": "Plan 9"`).
-2. Esperado: el segundo falla con "Ninguna opción coincide con …" (nada se elige
+2. Esperado: el segundo falla con '"Plan 9" no es una opción del campo …' (nada se elige
    por aproximación), sale sin guardar (se vuelve a My Estimate) y el tercero se
    procesa y confirma. Panel: ERROR con el segundo en faltantes y "Me detuve en
    …"; **sin URL**. My Estimate muestra solo el primero y el tercero.
 3. Variante: si la salida sin guardar no se confirma en 20 s (p. ej. un modal que
-   la bloquea), el panel dice "No pude salir del formulario sin guardar; detuve
-   la corrida…" y los servicios restantes figuran como "no se procesó".
+   la bloquea), el panel dice "No pude salir del formulario sin guardar y detuve
+   la corrida…" y los servicios restantes figuran con "No se procesó porque la
+   corrida se detuvo antes.".
 
 ### R6 — Cancelación
 
-1. Iniciar R2 y, mientras configura el segundo servicio, cancelar la corrida
-   desde el panel (mensaje `CANCEL_RPA` con el `runId`). Mientras U6 no tenga el
-   botón, desde la consola del panel lateral (clic derecho → Inspeccionar):
-   `chrome.tabs.sendMessage(<tabId>, { type: "CANCEL_RPA", runId: "<runId>" })`,
-   con el `runId` y el `tabId` del "Registro técnico" de la corrida en curso.
+1. Iniciar R2 y, mientras configura el segundo servicio, pulsar "Cancelar" en
+   el panel y confirmar con "Sí, cancelar" (el panel envía `CANCEL_RPA` con el
+   `runId` de la corrida en curso).
 2. Esperado: el RPA deja de tocar la página en segundos, sale del formulario sin
-   guardar y el panel muestra "Cancelaste la corrida; los servicios pendientes no
-   se procesaron." **sin URL**; el servicio en curso y los siguientes figuran como
-   "no se procesó".
+   guardar y el panel vuelve a la entrada con "Cancelaste la corrida.",
+   **sin URL**. Si la confirmación no llega en 20 s, vuelve igual con "No llegó la
+   confirmación de la cancelación…". En "Última corrida" figura con error; el
+   servicio en curso y los siguientes quedan como no procesados en el registro.
 
 ### R7 — Sustitución del cerebro
 
@@ -186,7 +194,8 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 2. Esperado: si el cerebro elige una opción escaneada distinta, el servicio se
    confirma y el panel avisa "Pediste t3.m; se usó t3.medium." Si elige
    exactamente lo pedido, no hay aviso. Con el cerebro caído o sin sesión, el
-   servicio falla con "No reconocí el campo …" y **no** hay URL.
+   servicio falla con "Hay campos que no pude reconocer: …" y **no** hay URL;
+   sin sesión, el panel ofrece además "Iniciar sesión".
 
 ### R8 — Servicios homónimos
 
@@ -199,7 +208,8 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 
 ### R9 — Overlay ausente tras cancelar
 
-1. Iniciar R1 y cancelar justo cuando un campo está resaltado.
+1. Iniciar R1 y, justo cuando un campo está resaltado, pulsar "Cancelar" y
+   confirmar con "Sí, cancelar".
 2. Esperado: el contorno y la etiqueta desaparecen al instante; en DevTools no
    queda ningún nodo `[data-aidlc-overlay]`; un nuevo "Generar Estimado" sobre un
    estimado vacío funciona normalmente.
@@ -225,11 +235,110 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 | | | R8 | | | |
 | | | R9 | | | |
 
+## Casos del panel (U6)
+
+Verifican la Zona B del panel lateral: render, foco, anuncios, tiempos y
+accesibilidad. La Zona A (reductor, textos, URL, historial, WAF) se prueba con
+`npm run test:u6`. Tiempos: en la consola del panel (clic derecho →
+"Inspeccionar"), `performance.getEntriesByName("panel-ready")[0].startTime`
+mide la apertura; repetir 5 veces y anotar el peor valor.
+
+### P1 — Pestañas y aviso de privacidad
+
+1. Abrir el panel: pestañas "JSON" y "Lenguaje natural", área de texto y
+   "Generar Estimado"; sin mensajes de corridas anteriores.
+2. Escribir en JSON, pasar a "Lenguaje natural" (clic y flechas), escribir y
+   volver: cada pestaña conserva su texto. Cerrar y reabrir el panel: el texto
+   sigue (sesión del navegador).
+3. En "Lenguaje natural" se ve "No incluyas nombres de clientes ni datos
+   personales; describe solo la arquitectura." y el lector de pantalla lo lee al
+   entrar al área (`aria-describedby`).
+4. Esperado: con el cerebro sin desplegar, "Generar Estimado" en lenguaje
+   natural termina en "No pude conectar con el servicio de interpretación.
+   Intenta más tarde." con el texto intacto.
+
+### P2 — Vista previa
+
+1. JSON sin `region` → "Generar Estimado".
+2. Esperado: vista previa con cada servicio, su plantilla si la trae y
+   "Región: us-east-1 (por defecto)". Editar el texto descarta la vista previa.
+
+### P3 — Revisión Well-Architected con y sin cerebro
+
+1. Sin cerebro desplegado: en la vista previa, "Revisar y generar" → "Iniciar
+   sesión" → el login responde sin cerebro.
+2. Esperado sin cerebro: la corrida sigue y aparece "Esta corrida no tiene
+   revisión Well-Architected."; al terminar bien no hay evaluación final y se ve
+   "Nueva corrida".
+3. Con cerebro y sesión: sin hallazgos, "Revisión Well-Architected sin
+   hallazgos." y la corrida arranca; con hallazgos, lista por servicio, pilar y
+   severidad con "Llenar igual" y "Corregir". Al terminar bien, la evaluación
+   final se lanza sola, con "Sin hallazgos" explícito por servicio y la URL
+   visible arriba.
+
+### P4 — Login y regla de 15 minutos
+
+1. Con cerebro desplegado, sin sesión: "Revisar y generar" muestra "Iniciar
+   sesión para revisar la configuración con Well-Architected." y el botón
+   "Iniciar sesión".
+2. Con una sesión de menos de 15 minutos (editarla como en S13), pasa lo mismo.
+3. Cerrar la ventana de login: "No se completó el inicio de sesión." y el botón
+   sigue disponible. Iniciar sesión: la revisión arranca sola.
+
+### P5 — Cancelación
+
+1. Durante "Interpretando…" o la revisión, pulsar Escape: vuelve a la entrada
+   con el texto intacto y sin error.
+2. Durante una corrida, "Cancelar" abre la confirmación con el foco en "Sí,
+   cancelar"; Escape la cierra sin cancelar. Confirmar: ver R6.
+
+### P6 — Reapertura durante una corrida
+
+1. Iniciar R2 y cerrar el panel; reabrirlo en menos de 60 s.
+2. Esperado: el panel abre en "Servicio N de M" con la entrada y el historial
+   deshabilitados, y termina igual que sin cerrar. Apertura **≤ 500 ms**
+   (marca `panel-ready`, peor de 5, con 100 corridas en el historial).
+
+### P7 — Historial
+
+1. Con más de 200 corridas en el registro, desplegar "Historial de corridas".
+2. Esperado: lista en **≤ 1 s** con "Mostrando las 200 más recientes de N." y
+   "Exportar todo"; enlace "Abrir estimado" solo en corridas con URL válida.
+   Durante una corrida, "Borrar", "Borrar todo" y "Reparar índice" están
+   deshabilitados.
+
+### P8 — Accesibilidad y tiempos
+
+1. Recorrer todo solo con teclado (Tab, flechas en las pestañas, Enter, Escape):
+   cada control es alcanzable, con foco visible y objetivos de 44 px.
+2. Con lector de pantalla: la región de estado anuncia "Validando…",
+   "Interpretando…", "Conectando con calculator.aws…" y "Servicio N de M" sin
+   anunciar cada acción; al entrar a un error el foco va al mensaje
+   (`role="alert"`).
+3. Contraste WCAG 2.1 AA (4,5:1 para texto) en textos de estado, errores,
+   avisos y severidades; el estado de cada servicio se lee también como texto,
+   no solo por color.
+4. Ancho de 320 px: sin desplazamiento horizontal.
+5. Tiempos: progreso reflejado en **≤ 200 ms** desde la llegada del evento
+   (`performance.now()` en la consola) y los de P6 y P7.
+
+| Fecha | Versión / commit | Caso | Duración | Resultado | Notas |
+|---|---|---|---|---|---|
+| | | P1 | | | |
+| | | P2 | | | |
+| | | P3 | | | |
+| | | P4 | | | |
+| | | P5 | | | |
+| | | P6 | | | |
+| | | P7 | | | |
+| | | P8 | | | |
+
 ## U7 — Empaquetado y cliente del cerebro
 
-Casos manuales del service worker, el login y el `.zip`. Hasta que U6 agregue el
-botón "Iniciar sesión", los mensajes del borde se envían desde la consola del
-panel lateral (clic derecho en el panel → "Inspeccionar"). Los casos con el
+Casos manuales del service worker, el login y el `.zip`. El login también se
+prueba desde el panel con "Iniciar sesión" (P4); los mensajes del borde se
+pueden enviar desde la consola del panel lateral (clic derecho en el panel →
+"Inspeccionar"). Los casos con el
 cerebro desplegado requieren haber corrido `node scripts/sync-brain-config.js`
 con `infra/cdk-outputs.json` y recargado la extensión.
 

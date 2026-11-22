@@ -69,8 +69,7 @@ export function createContentMain({
     const controller = new AbortController();
     activeController = controller;
     const context = { step: "preconditions", signal: controller.signal };
-    let lastPct = 0;
-    let lastText = "";
+    let lastFields = {};
     let emitProgress = () => {};
     const logger = createLogger({
       storage,
@@ -79,26 +78,25 @@ export function createContentMain({
       now,
       consoleApi,
       debugToConsole,
-      onDegraded: () => emitProgress(lastPct, DEGRADED_LOG_TEXT, { logDegraded: true }),
+      onDegraded: () => {
+        consoleApi.warn(formatConsolePrefix(runId, "warn"), DEGRADED_LOG_TEXT);
+        emitProgress({ ...lastFields, logDegraded: true });
+      },
     });
-    // Acepta el ProgressEvent estructurado del orquestador (decisión 2) o la
-    // forma de U1 (pct, text, extra). Sin texto nuevo se conserva el último.
-    emitProgress = (pctOrEvent, text, extra) => {
-      if (closedRunIds.has(runId)) return;
-      const structured = pctOrEvent !== null && typeof pctOrEvent === "object";
-      const fields = structured ? pctOrEvent : (extra ?? {});
-      const pct = structured ? (pctOrEvent.pct ?? lastPct) : pctOrEvent;
-      const message = (structured ? pctOrEvent.text : text) ?? lastText;
-      const event = makeProgressEvent(runId, pct, message, fields);
-      lastPct = event.pct;
-      lastText = event.text;
+    // Solo el ProgressEvent estructurado del orquestador, sin pct ni text
+    // (decisión 7 de U6): el panel arma el texto del paso.
+    emitProgress = (fields) => {
+      if (closedRunIds.has(runId) || fields === null || typeof fields !== "object") return;
+      const event = makeProgressEvent(runId, fields);
+      lastFields = { ...event };
+      delete lastFields.logDegraded;
       logger.updateActiveRun(event);
-      logger.log({ level: "debug", step: context.step, event: "progress", message: event.text });
+      logger.log({ level: "debug", step: context.step, event: "progress", message: event.step });
       send(makeProgressMessage(event));
     };
 
+    // El latido arranca con activeRun que escribe logger.start (BR6.6).
     logger.start(runRequest);
-    emitProgress(2, "Corrida aceptada en calculator.aws…");
     let result;
     try {
       result = await runEstimateFn(runRequest, {

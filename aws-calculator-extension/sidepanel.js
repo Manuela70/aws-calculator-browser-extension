@@ -1,38 +1,35 @@
-// sidepanel.js — Panel lateral: flujo W1 (BR6.1-BR6.6; NFR3.3, NFR3.4, NFR3.8, NFR5.3, NFR5.4).
-// PROVISIONAL (U1, walking skeleton). Dueño final: U6.
-// Zona B (smoke manual): la lógica pura vive en lib/** (panel-state, heartbeat,
-// validation, json-parser, input-normalizer, messages-es).
-// Seguridad: todo texto se inserta con textContent; el enlace solo si es
-// https://calculator.aws/ (BR6.5).
+// sidepanel.js — Panel lateral (U6; US5.1, US6.1-US6.3; BR1.1-BR5.3; NFR5.1, NFR8.5, NFR8.6).
+// Zona B (smoke manual en SMOKE.md). Cablea el reductor puro (lib/panel/panel-state.js),
+// los efectos (lib/panel/effects.js), el texto de las pestañas (tab-store), el
+// historial (history-view sobre lib/history-store.js) y las vistas de render.
+// No hace fetch, no toca chrome.storage.local ni el token: el cerebro se usa
+// solo por mensajes (brain-port de U7). Todo texto variable va por textContent.
 
-import { normalize } from "./lib/input/input-normalizer.js";
-import { INPUT_ERROR_CODES } from "./lib/input/input-errors.js";
-import { INPUT_FORMATS } from "./lib/input/input-schema.js";
+import { createBrainPort, fromChromeRuntime } from "./lib/connection/brain-port.js";
 import { connectToCalculator } from "./lib/connection/handshake.js";
-import { MESSAGE_TYPES, STORAGE_KEYS, makeRunRpa, makeStoredRunRecord } from "./lib/messages.js";
-import { isCalculatorUrl, isMessageForRun, isRunResult } from "./lib/validation.js";
-import { describeRunResult } from "./lib/messages-es.js";
-import { buildErrorRunResult } from "./lib/rpa/result-aggregator.js";
+import { createHistoryStore } from "./lib/history-store.js";
+import { messageFor } from "./lib/messages-es.js";
+import { createPanelEffects } from "./lib/panel/effects.js";
+import { createHistoryView } from "./lib/panel/history-view.js";
 import {
-  PANEL_EVENTS,
-  PANEL_STATES,
+  INPUT_TABS,
+  PANEL_EVENTS as E,
+  PANEL_STATES as S,
   canDeleteLogs,
-  isRunButtonEnabled,
-  resolveInitialView,
+  createInitialState,
   transition,
 } from "./lib/panel/panel-state.js";
-import { HEARTBEAT_STALE_MS, isHeartbeatStale } from "./lib/panel/heartbeat.js";
+import { renderActions, renderInput, renderStatus } from "./lib/panel/render/input-view.js";
+import { renderCancelConfirm, renderPreview, renderProgress } from "./lib/panel/render/run-view.js";
 import {
-  chunkKeysForRow,
-  durationMs,
-  getRowState,
-  rebuildIndex,
-  removeRow,
-  totalBytes,
-} from "./lib/log/log-index.js";
-
-const WATCH_INTERVAL_MS = 5000;
-const storage = chrome.storage.local;
+  renderError,
+  renderFindings,
+  renderResult,
+  renderWaf,
+} from "./lib/panel/render/result-view.js";
+import { createTabStore } from "./lib/panel/tab-store.js";
+import { TIMEOUTS, createTimers } from "./lib/panel/timers.js";
+import { isValidEstimateUrl } from "./lib/panel/url-check.js";
 
 const EXAMPLE_JSON = {
   project: "Skeleton EC2",
@@ -51,466 +48,263 @@ const EXAMPLE_JSON = {
   ],
 };
 
+const byId = (id) => document.getElementById(id);
+
 const ui = {
-  input: document.getElementById("json-input"),
-  example: document.getElementById("btn-example"),
-  run: document.getElementById("btn-run"),
-  progress: document.getElementById("progress"),
-  progressFill: document.getElementById("progress-fill"),
-  progressText: document.getElementById("progress-text"),
-  status: document.getElementById("status"),
-  logWarning: document.getElementById("log-warning"),
-  result: document.getElementById("result"),
-  resultCaption: document.getElementById("result-caption"),
-  resultTitle: document.getElementById("result-title"),
-  resultList: document.getElementById("result-list"),
-  resultUrl: document.getElementById("result-url"),
-  resultLink: document.getElementById("result-link"),
-  copy: document.getElementById("btn-copy"),
-  runsTotal: document.getElementById("runs-total"),
-  runsList: document.getElementById("runs-list"),
-  exportAll: document.getElementById("btn-export-all"),
-  deleteAll: document.getElementById("btn-delete-all"),
-  repair: document.getElementById("btn-repair"),
+  tabJson: byId("tab-json"),
+  tabNl: byId("tab-nl"),
+  inputPanel: byId("input-panel"),
+  inputLabel: byId("input-label"),
+  input: byId("input-area"),
+  privacyNotice: byId("nl-privacy-notice"),
+  exampleButton: byId("example-button"),
+  generateButton: byId("generate-button"),
+  cancelButton: byId("cancel-button"),
+  noReviewNotice: byId("no-review-notice"),
+  statusRegion: byId("status-region"),
+  notice: byId("notice"),
+  cancelConfirm: byId("cancel-confirm"),
+  cancelConfirmText: byId("cancel-confirm-text"),
+  cancelConfirmButton: byId("cancel-confirm-button"),
+  cancelDismissButton: byId("cancel-dismiss-button"),
+  errorView: byId("error-view"),
+  errorMessage: byId("error-message"),
+  errorFragments: byId("error-fragments"),
+  preview: byId("preview"),
+  previewMeta: byId("preview-meta"),
+  previewList: byId("preview-list"),
+  reviewNotice: byId("review-notice"),
+  findings: byId("review-findings"),
+  findingsList: byId("review-findings-list"),
+  progress: byId("progress"),
+  progressList: byId("progress-list"),
+  logWarning: byId("log-warning"),
+  result: byId("result"),
+  resultTitle: byId("result-title"),
+  resultMessage: byId("result-message"),
+  resultUrlBox: byId("result-url"),
+  copyButton: byId("copy-url-button"),
+  copyStatus: byId("copy-status"),
+  resultMissing: byId("result-missing"),
+  resultServices: byId("result-services"),
+  waf: byId("waf"),
+  wafList: byId("waf-list"),
+  actions: byId("actions"),
+  previewContinueButton: byId("preview-continue-button"),
+  loginButton: byId("login-button"),
+  fillAnywayButton: byId("fill-anyway-button"),
+  correctButton: byId("correct-button"),
+  reviewRetryButton: byId("review-retry-button"),
+  connectionRetryButton: byId("connection-retry-button"),
+  retryButton: byId("retry-button"),
+  retryWafButton: byId("retry-waf-button"),
+  backButton: byId("back-button"),
+  newRunButton: byId("new-run-button"),
+  lastRunDetails: byId("last-run"),
+  lastRunBody: byId("last-run-body"),
+  historyDetails: byId("history"),
+  historySummary: byId("history-summary"),
+  historyList: byId("history-list"),
+  historyExport: byId("history-export-button"),
+  historyDeleteAll: byId("history-delete-all-button"),
+  historyRepair: byId("history-repair-button"),
 };
+ui.actionButtons = [...ui.actions.querySelectorAll("button")];
 
-const panel = {
-  state: PANEL_STATES.IDLE,
-  runId: null,
-  tabId: null,
-  acceptedAt: 0,
-  watchTimer: null,
-  index: [],
-  inputController: null,
-};
+let model = createInitialState();
+let renderedModel = null;
+let frame = null;
+let ignoredEvents = 0;
+const viewTimers = createTimers();
+const tabStore = createTabStore();
+const historyStore = createHistoryStore();
+const brainPort = createBrainPort({ sendMessage: fromChromeRuntime(chrome.runtime) });
 
-// ─── Presentación ─────────────────────────────────────────────────────────────
+const historyView = createHistoryView({
+  ui,
+  historyStore,
+  isLocked: () => !canDeleteLogs(model),
+  onStatus: (text) => showMessage(text),
+});
+
+const effects = createPanelEffects({
+  dispatch,
+  getModel: () => model,
+  brainPort,
+  tabsApi: chrome.tabs,
+  connect: () => connectToCalculator({ chromeApi: chrome }),
+  historyStore,
+});
+
+// ─── Despacho y persistencia ──────────────────────────────────────────────────
+
+function persist(prev, next) {
+  for (const tab of Object.values(INPUT_TABS)) {
+    if (prev.texts[tab] !== next.texts[tab]) tabStore.saveText(tab, next.texts[tab]);
+  }
+  if (prev.activeTab !== next.activeTab) tabStore.saveActiveTab(next.activeTab);
+}
 
 function dispatch(event) {
-  const next = transition(panel.state, event);
-  panel.state = next.state;
-  ui.run.disabled = !isRunButtonEnabled(panel.state);
-  renderRuns();
-  return next.changed;
-}
-
-function showStatus(text, kind = "info") {
-  ui.status.textContent = text;
-  ui.status.className = `box ${kind}`;
-  ui.status.hidden = !text;
-}
-
-function showProgress(pct, text) {
-  ui.progress.hidden = false;
-  ui.progressFill.style.width = `${Math.min(100, Math.max(0, Number(pct) || 0))}%`;
-  ui.progressText.textContent = text;
-}
-
-function clearResultView() {
-  ui.result.hidden = true;
-  ui.resultList.replaceChildren();
-  ui.resultUrl.hidden = true;
-  ui.resultLink.removeAttribute("href");
-  ui.resultLink.textContent = "";
-  ui.logWarning.hidden = true;
-}
-
-function renderResult(runResult, caption) {
-  const view = describeRunResult(runResult);
-  ui.result.hidden = false;
-  ui.result.className = `box ${view.showUrl ? "success" : "error"}`;
-  ui.resultCaption.textContent = caption;
-  ui.resultTitle.textContent = view.title;
-  ui.resultList.replaceChildren(
-    ...view.lines.map((line) => {
-      const item = document.createElement("li");
-      item.textContent = line;
-      return item;
-    }),
-  );
-  // URL solo si DONE y validada (BR5.4, BR6.5).
-  const showUrl = view.showUrl && isCalculatorUrl(runResult.estimateUrl);
-  ui.resultUrl.hidden = !showUrl;
-  if (showUrl) {
-    ui.resultLink.href = runResult.estimateUrl;
-    ui.resultLink.textContent = runResult.estimateUrl;
-  }
-}
-
-// ─── Persistencia del resultado ───────────────────────────────────────────────
-
-async function saveLastRunResult(runResult) {
-  try {
-    await storage.set({ [STORAGE_KEYS.LAST_RUN_RESULT]: makeStoredRunRecord(runResult) });
-  } catch (error) {
-    console.error("[aws-calc] panel error", "No pude guardar el último resultado", error);
-  }
-}
-
-function stopWatch() {
-  if (panel.watchTimer !== null) clearInterval(panel.watchTimer);
-  panel.watchTimer = null;
-}
-
-function presentResult(runResult) {
-  if (!isRunResult(runResult) || runResult.runId !== panel.runId) return;
-  stopWatch();
-  dispatch(runResult.status === "DONE" ? PANEL_EVENTS.RESULT_DONE : PANEL_EVENTS.RESULT_ERROR);
-  showStatus("");
-  renderResult(runResult, "Resultado de la corrida");
-  panel.runId = null;
-  panel.tabId = null;
-  loadRuns();
-}
-
-async function finishLocally(runResult, event) {
-  await saveLastRunResult(runResult);
-  stopWatch();
-  dispatch(event);
-  showStatus("");
-  renderResult(runResult, "Resultado de la corrida");
-  panel.runId = null;
-  panel.tabId = null;
-  loadRuns();
-}
-
-// BR6.6: corrida que dejó de responder → ERROR lost guardado en lastRunResult.
-async function closeAsLost(runId) {
-  const result = buildErrorRunResult({ runId, failureStep: "lost", now: () => new Date() });
-  try {
-    const stored = await storage.get(STORAGE_KEYS.ACTIVE_RUN);
-    if (stored[STORAGE_KEYS.ACTIVE_RUN]?.runId === runId)
-      await storage.remove(STORAGE_KEYS.ACTIVE_RUN);
-  } catch (error) {
-    console.error("[aws-calc] panel error", "No pude limpiar la corrida activa", error);
-  }
-  panel.runId = runId;
-  await finishLocally(result, PANEL_EVENTS.RUN_LOST);
-}
-
-// ─── Vigilancia de la corrida (latido y pestaña) ──────────────────────────────
-
-async function checkHeartbeat() {
-  if (panel.state !== PANEL_STATES.RUNNING || !panel.runId) return;
-  const runId = panel.runId;
-  const stored = await storage.get([STORAGE_KEYS.ACTIVE_RUN, STORAGE_KEYS.LAST_RUN_RESULT]);
-  const last = stored[STORAGE_KEYS.LAST_RUN_RESULT]?.value;
-  if (last?.runId === runId) {
-    presentResult(last);
+  const prev = model;
+  model = transition(model, event);
+  if (model === prev) {
+    ignoredEvents += 1;
     return;
   }
-  const active = stored[STORAGE_KEYS.ACTIVE_RUN];
-  const updatedAt = active?.runId === runId ? active.updatedAt : panel.acceptedAt;
-  if (isHeartbeatStale(updatedAt, Date.now(), HEARTBEAT_STALE_MS)) await closeAsLost(runId);
+  effects.onTransition(prev, model);
+  persist(prev, model);
+  if (canDeleteLogs(prev) !== canDeleteLogs(model)) historyView.setLocked(!canDeleteLogs(model));
+  if (prev.state === S.RUNNING && model.state !== S.RUNNING) historyView.refresh();
+  scheduleRender();
 }
 
-function startWatch() {
-  stopWatch();
-  panel.watchTimer = setInterval(() => {
-    checkHeartbeat().catch((error) => console.error("[aws-calc] panel error", error));
-  }, WATCH_INTERVAL_MS);
+// ─── Render agrupado por requestAnimationFrame (NFR8.6) ───────────────────────
+
+function focusOnEntry(previous) {
+  const enteredError = renderError(ui, model);
+  if (renderCancelConfirm(ui, model)) ui.cancelConfirmButton.focus();
+  else if (enteredError) ui.errorMessage.focus();
+  else if (model.state === S.FAILED && previous?.state !== S.FAILED) ui.resultMessage.focus();
 }
 
-// ─── W1: iniciar una corrida ──────────────────────────────────────────────────
-
-function newRunId() {
-  return `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
+function render() {
+  frame = null;
+  const previous = renderedModel;
+  renderedModel = model;
+  const now = Date.now();
+  renderInput(ui, model);
+  renderStatus(ui, model);
+  renderPreview(ui, model);
+  renderFindings(ui, model);
+  renderProgress(ui, model, now);
+  renderResult(ui, model);
+  renderWaf(ui, model);
+  renderActions(ui, model);
+  focusOnEntry(previous);
+  syncTick();
 }
 
-// Cada "Generar Estimado" normaliza desde cero con su propia señal (BR5.2).
-// El puerto del cerebro es null hasta que U7 lo conecte: el camino JSON corre
-// sin revisión Well-Architected y el de lenguaje natural respondería
-// brain_unavailable (BR3.5, BR5.4).
-function validateInput() {
-  panel.inputController?.abort();
-  panel.inputController = new AbortController();
-  return normalize(
-    { format: INPUT_FORMATS.JSON, text: ui.input.value },
-    { interpretNaturalLanguage: null, signal: panel.inputController.signal },
-  );
+function scheduleRender() {
+  if (frame === null) frame = requestAnimationFrame(render);
 }
 
-async function sendRunRequest(runRequest, tabId) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, makeRunRpa(runRequest, tabId));
-  } catch (error) {
-    console.error("[aws-calc] panel error", "RUN_RPA sin respuesta", error);
-    return null;
-  }
+// Repinta cada segundo mientras se consulta el cerebro (tiempo transcurrido).
+function syncTick() {
+  const asking = model.state === S.RUNNING && model.progress?.step === "asking_brain";
+  if (asking && !viewTimers.has("tick")) viewTimers.every("tick", TIMEOUTS.TICK_MS, scheduleRender);
+  if (!asking) viewTimers.stop("tick");
 }
 
-async function startRun() {
-  if (!dispatch(PANEL_EVENTS.SUBMIT)) return;
-  const input = await validateInput();
-  if (!input.ok) {
-    dispatch(PANEL_EVENTS.INPUT_INVALID);
-    // El texto del error lo fija input-errors.js; se pinta con textContent.
-    // Una cancelación no se muestra como error (BR3.6).
-    const isCancelled = input.error.code === INPUT_ERROR_CODES.CANCELLED;
-    showStatus(isCancelled ? "" : input.error.message, "error");
-    return;
-  }
-  const runRequest = { runId: newRunId(), services: input.value.services };
-  if (input.value.project) runRequest.project = input.value.project;
-  dispatch(PANEL_EVENTS.INPUT_VALID);
-  panel.runId = runRequest.runId;
-  clearResultView();
-  showStatus("Conectando con calculator.aws…", "info");
-  showProgress(1, "Buscando la pestaña de calculator.aws…");
+// ─── Interacción ──────────────────────────────────────────────────────────────
 
-  const connection = await connectToCalculator({ chromeApi: chrome });
-  const now = () => new Date();
-  if (connection.status !== "connected") {
-    const failureDetail =
-      connection.failure === "module_load_failed" ? "module_load_failed" : undefined;
-    const result = buildErrorRunResult({
-      runId: runRequest.runId,
-      failureStep: "connection",
-      failureDetail,
-      now,
-    });
-    await finishLocally(result, PANEL_EVENTS.HANDSHAKE_FAILED);
-    return;
-  }
-  panel.tabId = connection.tabId;
-  const response = await sendRunRequest(runRequest, connection.tabId);
-  if (!response?.accepted) {
-    const failureDetail = response?.reason ?? "not_ready";
-    const result = buildErrorRunResult({
-      runId: runRequest.runId,
-      failureStep: "connection",
-      failureDetail,
-      now,
-    });
-    await finishLocally(result, PANEL_EVENTS.RUN_REJECTED);
-    return;
-  }
-  panel.acceptedAt = Date.now();
-  dispatch(PANEL_EVENTS.RUN_ACCEPTED);
-  showStatus("Corrida en curso en calculator.aws.", "info");
-  startWatch();
+// Aviso puntual de la vista (historial, almacenamiento); el próximo render lo
+// reemplaza por el aviso del modelo.
+function showMessage(text) {
+  ui.notice.textContent = text;
+  ui.notice.hidden = false;
 }
 
-// ─── Mensajes y cambios de almacenamiento ─────────────────────────────────────
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (!isMessageForRun(message, panel.runId)) return false;
-  if (message.type === MESSAGE_TYPES.PROGRESS) {
-    showProgress(message.pct, message.text);
-    if (message.logDegraded) {
-      ui.logWarning.textContent = "No pude guardar parte del registro técnico.";
-      ui.logWarning.hidden = false;
-    }
-  } else if (message.type === MESSAGE_TYPES.RUN_RESULT) {
-    presentResult(message.runResult);
-  }
-  return false;
-});
-
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local") return;
-  const last = changes[STORAGE_KEYS.LAST_RUN_RESULT]?.newValue?.value;
-  if (last && panel.state === PANEL_STATES.RUNNING && last.runId === panel.runId)
-    presentResult(last);
-  const active = changes[STORAGE_KEYS.ACTIVE_RUN]?.newValue;
-  if (active?.runId === panel.runId && active.lastProgress) {
-    showProgress(active.lastProgress.pct, active.lastProgress.text);
-  }
-  if (changes[STORAGE_KEYS.RUN_LOG_INDEX]) loadRuns();
-});
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (panel.state === PANEL_STATES.RUNNING && tabId === panel.tabId && panel.runId) {
-    closeAsLost(panel.runId).catch((error) => console.error("[aws-calc] panel error", error));
-  }
-});
-
-// ─── Registro técnico: lista, exportar, borrar, reparar ───────────────────────
-
-function formatBytes(bytes) {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function describeRow(row) {
-  const state = getRowState(row);
-  const verdict = state === "interrupted" ? "interrumpida" : state;
-  const date = row.startedAt ? new Date(row.startedAt).toLocaleString("es") : "sin fecha";
-  const ms = durationMs(row);
-  const duration = ms === null ? "" : ` · ${Math.round(ms / 1000)} s`;
-  const degraded = row.degraded ? " · registro incompleto" : "";
-  return `${date} · ${verdict}${duration} · ${formatBytes(Number(row.bytes) || 0)}${degraded}`;
-}
-
-function makeButton(text, testId, onClick) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = text;
-  button.dataset.testid = testId;
-  button.addEventListener("click", onClick);
-  return button;
-}
-
-function renderRuns() {
-  const deletable = canDeleteLogs(panel.state);
-  ui.runsTotal.textContent = `${panel.index.length} corrida(s) · ${formatBytes(totalBytes(panel.index))}`;
-  ui.runsList.replaceChildren(
-    ...[...panel.index].reverse().map((row) => {
-      const item = document.createElement("li");
-      item.className = "run-row";
-      item.dataset.testid = "sidepanel-runs-row";
-      const text = document.createElement("span");
-      text.textContent = describeRow(row);
-      const actions = document.createElement("span");
-      actions.className = "run-actions";
-      const remove = makeButton("Borrar", "sidepanel-run-delete-button", () =>
-        runSafely(() => deleteRun(row)),
-      );
-      remove.disabled = !deletable;
-      actions.append(
-        makeButton("Exportar", "sidepanel-run-export-button", () =>
-          runSafely(() => exportRuns([row])),
-        ),
-        remove,
-      );
-      item.append(text, actions);
-      return item;
-    }),
-  );
-  ui.deleteAll.disabled = !deletable;
-  ui.repair.disabled = !deletable;
-}
-
-async function loadRuns() {
-  const stored = await storage.get(STORAGE_KEYS.RUN_LOG_INDEX);
-  panel.index = Array.isArray(stored[STORAGE_KEYS.RUN_LOG_INDEX])
-    ? stored[STORAGE_KEYS.RUN_LOG_INDEX]
-    : [];
-  renderRuns();
-}
-
-function downloadJson(fileName, data) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
-  );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function readEntries(row) {
-  const keys = chunkKeysForRow(row);
-  const stored = await storage.get(keys);
-  return keys.flatMap((key) => (Array.isArray(stored[key]) ? stored[key] : []));
-}
-
-async function exportRuns(rows) {
-  const runs = [];
-  for (const row of rows)
-    runs.push({ runId: row.runId, index: row, entries: await readEntries(row) });
-  const fileName =
-    rows.length === 1 ? `aws-calc-${rows[0].runId}.json` : "aws-calc-registro-completo.json";
-  downloadJson(fileName, rows.length === 1 ? runs[0] : runs);
-}
-
-async function deleteRun(row) {
-  if (!canDeleteLogs(panel.state)) return;
-  await storage.remove(chunkKeysForRow(row));
-  const stored = await storage.get(STORAGE_KEYS.RUN_LOG_INDEX);
-  await storage.set({
-    [STORAGE_KEYS.RUN_LOG_INDEX]: removeRow(stored[STORAGE_KEYS.RUN_LOG_INDEX], row.runId),
-  });
-  await loadRuns();
-}
-
-async function deleteAll() {
-  if (!canDeleteLogs(panel.state)) return;
-  const keys = panel.index.flatMap(chunkKeysForRow);
-  await storage.remove([...keys, STORAGE_KEYS.RUN_LOG_INDEX, STORAGE_KEYS.LAST_RUN_RESULT]);
-  clearResultView();
-  await loadRuns();
-}
-
-async function repairIndex() {
-  if (!canDeleteLogs(panel.state)) return;
-  const all = await storage.get(null);
-  await storage.set({ [STORAGE_KEYS.RUN_LOG_INDEX]: rebuildIndex(all) });
-  await loadRuns();
-}
-
-function runSafely(action) {
-  action().catch((error) => {
-    console.error("[aws-calc] panel error", error);
-    showStatus("No pude completar la operación sobre el registro.", "error");
-  });
-}
-
-// ─── Arranque ─────────────────────────────────────────────────────────────────
-
-async function init() {
-  const stored = await storage.get([STORAGE_KEYS.ACTIVE_RUN, STORAGE_KEYS.LAST_RUN_RESULT]);
-  await loadRuns();
-  const view = resolveInitialView({
-    activeRun: stored[STORAGE_KEYS.ACTIVE_RUN],
-    lastRunResult: stored[STORAGE_KEYS.LAST_RUN_RESULT]?.value,
-    now: Date.now(),
-  });
-  if (view.event === PANEL_EVENTS.RESUME_ACTIVE) {
-    panel.runId = view.runId;
-    panel.tabId = view.tabId;
-    panel.acceptedAt = Date.now();
-    dispatch(PANEL_EVENTS.RESUME_ACTIVE);
-    showStatus("Corrida en curso en calculator.aws.", "info");
-    if (view.lastProgress) showProgress(view.lastProgress.pct, view.lastProgress.text);
-    startWatch();
-    return;
-  }
-  if (view.event === PANEL_EVENTS.RUN_LOST) {
-    await closeAsLost(view.runId);
-    return;
-  }
-  if (isRunResult(view.lastRunResult)) renderResult(view.lastRunResult, "Última corrida");
-}
-
-ui.example.addEventListener("click", () => {
-  ui.input.value = JSON.stringify(EXAMPLE_JSON, null, 2);
-});
-
-ui.run.addEventListener("click", () => {
-  startRun().catch(async (error) => {
-    console.error("[aws-calc] panel error", error);
-    // El panel nunca queda bloqueado en un estado intermedio (BR6.6).
-    if (panel.state === PANEL_STATES.VALIDATING) {
-      dispatch(PANEL_EVENTS.INPUT_INVALID);
-      showStatus("No pude validar la entrada; revisa el JSON.", "error");
-      return;
-    }
-    if (panel.runId && panel.state === PANEL_STATES.CONNECTING) {
-      const result = buildErrorRunResult({
-        runId: panel.runId,
-        failureStep: "connection",
-        now: () => new Date(),
-      });
-      await finishLocally(result, PANEL_EVENTS.HANDSHAKE_FAILED);
-    }
-  });
-});
-
-ui.copy.addEventListener("click", () => {
-  const url = ui.resultLink.href;
-  if (!isCalculatorUrl(url)) return;
+function copyUrl() {
+  const url = model.runResult?.estimateUrl;
+  if (!isValidEstimateUrl(url)) return;
   navigator.clipboard.writeText(url).then(
-    () => showStatus("URL copiada.", "success"),
-    () => showStatus("No pude copiar la URL; cópiala desde el enlace.", "warning"),
+    () => (ui.copyStatus.textContent = messageFor("panel:copied")),
+    () => (ui.copyStatus.textContent = messageFor("panel:copy_failed")),
   );
-});
+}
 
-ui.exportAll.addEventListener("click", () => runSafely(() => exportRuns(panel.index)));
-ui.deleteAll.addEventListener("click", () => runSafely(deleteAll));
-ui.repair.addEventListener("click", () => runSafely(repairIndex));
+function selectTab(tab) {
+  dispatch({ type: E.TAB_CHANGE, tab });
+  (tab === INPUT_TABS.JSON ? ui.tabJson : ui.tabNl).focus();
+}
+
+// Pestañas con flechas, Inicio y Fin (WAI-ARIA tabs).
+function onTabKeydown(event) {
+  const keys = { ArrowLeft: "prev", ArrowRight: "next", Home: "first", End: "last" };
+  const move = keys[event.key];
+  if (!move) return;
+  event.preventDefault();
+  const isJson = model.activeTab === INPUT_TABS.JSON;
+  if (move === "first") selectTab(INPUT_TABS.JSON);
+  else if (move === "last") selectTab(INPUT_TABS.NATURAL_LANGUAGE);
+  else selectTab(isJson ? INPUT_TABS.NATURAL_LANGUAGE : INPUT_TABS.JSON);
+}
+
+// Escape cancela en Interpreting y Reviewing (y WafLoading) y cierra el diálogo de cancelar.
+function onKeydown(event) {
+  if (event.key !== "Escape") return;
+  if (model.confirmingCancel) dispatch({ type: E.CANCEL_DISMISSED });
+  else if ([S.INTERPRETING, S.REVIEWING, S.WAF_LOADING].includes(model.state)) {
+    dispatch({ type: E.CANCEL });
+  }
+}
+
+function on(node, type, handler) {
+  node.addEventListener(type, handler);
+}
+
+function bindEvents() {
+  on(ui.tabJson, "click", () => selectTab(INPUT_TABS.JSON));
+  on(ui.tabNl, "click", () => selectTab(INPUT_TABS.NATURAL_LANGUAGE));
+  on(ui.tabJson, "keydown", onTabKeydown);
+  on(ui.tabNl, "keydown", onTabKeydown);
+  on(ui.input, "input", () => {
+    dispatch({ type: E.TEXT_CHANGE, tab: model.activeTab, text: ui.input.value });
+  });
+  on(ui.exampleButton, "click", () => {
+    dispatch({
+      type: E.TEXT_CHANGE,
+      tab: INPUT_TABS.JSON,
+      text: JSON.stringify(EXAMPLE_JSON, null, 2),
+    });
+  });
+  const simple = [
+    [ui.generateButton, E.GENERATE],
+    [ui.cancelButton, E.CANCEL],
+    [ui.cancelConfirmButton, E.CANCEL_CONFIRMED],
+    [ui.cancelDismissButton, E.CANCEL_DISMISSED],
+    [ui.previewContinueButton, E.REVIEW_REQUESTED],
+    [ui.loginButton, E.LOGIN_REQUESTED],
+    [ui.fillAnywayButton, E.FILL_ANYWAY],
+    [ui.correctButton, E.CORRECT],
+    [ui.reviewRetryButton, E.RETRY],
+    [ui.connectionRetryButton, E.RETRY],
+    [ui.retryButton, E.RETRY],
+    [ui.retryWafButton, E.RETRY_WAF],
+    [ui.backButton, E.BACK],
+    [ui.newRunButton, E.NEW_RUN],
+  ];
+  for (const [button, type] of simple) on(button, "click", () => dispatch({ type }));
+  on(ui.copyButton, "click", copyUrl);
+  on(document, "keydown", onKeydown);
+  tabStore.bindFlush(ui.input, ["blur"]);
+  tabStore.bindFlush(window, ["pagehide"]);
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    effects.handleRuntimeMessage(message, sender, chrome.runtime.id);
+    return false;
+  });
+  chrome.tabs.onRemoved.addListener((tabId) => effects.handleTabRemoved(tabId));
+}
+
+// ─── Arranque (NFR8.5) ────────────────────────────────────────────────────────
+
+// Texto de las pestañas y corrida activa en paralelo (tope de 300 ms para la
+// corrida); el último resultado no se pinta al abrir (AC6.3.1).
+async function init() {
+  bindEvents();
+  const [saved] = await Promise.all([tabStore.load(), effects.resume()]);
+  dispatch({ type: E.HYDRATE, texts: saved.texts, activeTab: saved.activeTab });
+  if (frame !== null) cancelAnimationFrame(frame);
+  render();
+  performance.mark("panel-ready");
+}
 
 init().catch((error) => {
   console.error("[aws-calc] panel error", error);
-  showStatus("No pude leer el estado guardado de la extensión.", "error");
+  showMessage(messageFor("panel:storage_error"));
+  render();
 });
+
+// Diagnóstico: eventos ignorados por el reductor (sin transición o id ajeno).
+globalThis.awsCalcPanelDiagnostics = () => ({ state: model.state, ignoredEvents });

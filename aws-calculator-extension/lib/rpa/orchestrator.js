@@ -59,15 +59,15 @@ export function stepToFailure(step) {
 
 // --- Progreso (BR4.2) ---------------------------------------------------------
 
+// ProgressEvent estructurado sin pct ni text (decisión 7 de U6): el panel
+// arma el texto con messageFor("step:<paso>").
 function emit(run, step, extra = {}) {
-  if (extra.pct !== undefined) run.pct = extra.pct;
   run.progress(
     buildProgressEvent({
       runId: run.runRequest.runId,
       serviceCount: run.runRequest.services.length,
       step,
       ...extra,
-      pct: run.pct,
     }),
   );
 }
@@ -151,10 +151,7 @@ async function applyActions(run, state, actions, signal) {
     if (signal.aborted) return null;
     const field = fieldNamePart(action.fieldLabel);
     state.stoppedAtLabel = action.fieldLabel;
-    emitService(run, state, "applying_action", {
-      label: action.fieldLabel,
-      text: `Aplicando ${field} = ${action.value}…`,
-    });
+    emitService(run, state, "applying_action", { label: action.fieldLabel });
     const applied = await run.dom.applyAction(action, { signal });
     if (signal.aborted) return null;
     if (!applied.ok) {
@@ -212,10 +209,7 @@ async function saveWithRetries(run, svc, state, signal) {
   state.phase = "saving";
   const outcome = await retry(
     async (attempt) => {
-      emitService(run, state, "saving", {
-        label: state.calculatorServiceName,
-        text: `Guardando ${svc.serviceName} (intento ${attempt}/${SAVE_MAX_ATTEMPTS})…`,
-      });
+      emitService(run, state, "saving", { label: state.calculatorServiceName });
       const saved = await run.dom.saveService(state.calculatorServiceName, { signal });
       if (saved.ok) return { status: "success" };
       run.log({
@@ -296,10 +290,7 @@ function settle(run, svc, outcome) {
 // BR2.5 / NFR3.5: salir sin guardar con su propia señal de 20 s. Devuelve
 // { ok, listedNames }; ok = false detiene la corrida (RunStopped).
 async function exitForm(run, svc, state) {
-  emitService(run, state, "cancelling", {
-    label: state.stoppedAtLabel,
-    text: `Saliendo de ${svc.serviceName} sin guardar…`,
-  });
+  emitService(run, state, "cancelling", { label: state.stoppedAtLabel });
   const exitTimer = run.createExitTimer();
   try {
     const raced = await raceWithSignal(
@@ -337,7 +328,6 @@ async function returnToEstimate(run, svc) {
 
 // Un servicio dentro de su corte de 3 minutos (BR2.7), y después su salida.
 async function runService(run, svc, index) {
-  const total = run.runRequest.services.length;
   const state = {
     index,
     requestId: svc.requestId,
@@ -346,11 +336,9 @@ async function runService(run, svc, index) {
     appliedActions: [],
     calculatorServiceName: svc.serviceName,
   };
-  run.pct = 10 + Math.round((index / total) * 75);
   emitService(run, state, "adding_service", {
     label: svc.serviceName,
     serviceStatus: "in_progress",
-    text: `Configurando ${svc.serviceName} (${index + 1}/${total})…`,
   });
   const startedAt = run.now().getTime();
   const timer = run.createTimer({ runSignal: run.signal });
@@ -394,7 +382,7 @@ async function runService(run, svc, index) {
 // --- R1: corrida --------------------------------------------------------------
 
 async function checkPreconditions(run) {
-  emit(run, "checking_estimate", { pct: 5, text: "Abriendo My Estimate…" });
+  emit(run, "checking_estimate");
   const opts = { signal: run.signal };
   const opened = await run.dom.openEstimate(opts);
   if (!opened.ok) return { failureDetail: "timeout:abrir My Estimate", selector: opened.selector };
@@ -426,7 +414,7 @@ async function finishRun(run, aggregation, calculatorNames) {
   const finalize = (checks) => finalizeRunResult({ runId, aggregation, now: run.now, ...checks });
   const opts = { signal: run.signal };
   run.ctx.step = "estimate_check";
-  emit(run, "checking_estimate", { pct: 88, text: "Verificando el contenido del estimado…" });
+  emit(run, "checking_estimate");
   const listed = await run.dom.listEstimateServices(opts);
   if (run.signal.aborted)
     return cancelledResult(run, aggregation.perServiceResults, "estimate_check");
@@ -439,17 +427,13 @@ async function finishRun(run, aggregation, calculatorNames) {
   let renameOk;
   if (project) {
     run.ctx.step = "rename";
-    emit(run, "renaming", {
-      pct: 92,
-      label: project,
-      text: `Renombrando el estimado a "${project}"…`,
-    });
+    emit(run, "renaming", { label: project });
     renameOk = (await run.dom.renameEstimate(project, opts)).ok;
     if (run.signal.aborted) return cancelledResult(run, aggregation.perServiceResults, "rename");
     if (!renameOk) return finalize({ estimateMatches, renameOk });
   }
   run.ctx.step = "share";
-  emit(run, "sharing", { pct: 95, text: "Obteniendo el enlace público…" });
+  emit(run, "sharing");
   const shared = await run.dom.shareEstimate(opts);
   if (run.signal.aborted) return cancelledResult(run, aggregation.perServiceResults, "share");
   return finalize({ estimateMatches, renameOk, shareUrl: shared.ok ? shared.value : undefined });
@@ -517,7 +501,6 @@ function createRun(runRequest, deps) {
     signal: deps.signal ?? deps.context?.signal ?? new AbortController().signal,
     ctx: deps.context ?? { step: "preconditions" },
     regionSet: false,
-    pct: 5,
   };
 }
 
@@ -527,9 +510,7 @@ function createRun(runRequest, deps) {
 export async function runEstimate(runRequest, deps) {
   const run = createRun(runRequest, deps);
   try {
-    const result = await runSteps(run);
-    if (result.status === "DONE") emit(run, "sharing", { pct: 100, text: "Estimado listo." });
-    return result;
+    return await runSteps(run);
   } catch (error) {
     run.log({
       level: "error",

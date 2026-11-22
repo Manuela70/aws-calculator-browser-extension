@@ -148,8 +148,8 @@ export function buildServiceResult(svc, outcome = {}) {
   return result;
 }
 
-// ProgressEvent estructurado (decisión 2 del plan): conserva pct y text para el
-// panel actual; U6 los retirará.
+// ProgressEvent estructurado (decisión 2 del plan). Sin pct ni text: U6 los
+// retiró (decisión 7 de U6) y arma el texto del paso con messages-es.js.
 export function buildProgressEvent({
   runId,
   step,
@@ -158,8 +158,6 @@ export function buildProgressEvent({
   label,
   serviceStatus,
   requestId,
-  pct,
-  text,
 }) {
   if (!PROGRESS_STEPS.includes(step)) throw new RangeError(`Paso de progreso desconocido: ${step}`);
   const event = { runId, step, serviceCount: Number.isInteger(serviceCount) ? serviceCount : 0 };
@@ -167,8 +165,6 @@ export function buildProgressEvent({
   if (requestId) event.requestId = requestId;
   if (label) event.label = clip(label);
   if (SERVICE_STATUSES.includes(serviceStatus)) event.serviceStatus = serviceStatus;
-  if (pct !== undefined) event.pct = pct;
-  if (text !== undefined) event.text = clip(text);
   return event;
 }
 

@@ -4,8 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AWS Calculator — Applying</title>
-    <!-- Panel lateral (U1, walking skeleton). PROVISIONAL: U6 completa los estados M1-M8. -->
+    <!-- Panel lateral (U6). Esqueleto estático: el navegador lo pinta antes de que
+         corra sidepanel.js (NFR8.5). Todo texto variable lo escribe el script con
+         textContent; aquí solo hay copy fijo. -->
     <style>
+      :root {
+        --bg: #0f1117;
+        --surface: #1e2330;
+        --border: #3a4458;
+        --text: #e2e8f0;
+        --muted: #a0aec0;
+        --accent: #ff9900;
+        --accent-strong: #ffad33;
+        --focus: #ffd27f;
+        --info-bg: #1e3a5f;
+        --info-text: #bfdbfe;
+        --success-bg: #14532d;
+        --success-text: #bbf7d0;
+        --error-bg: #4c0519;
+        --error-text: #fecaca;
+        --warning-bg: #451a03;
+        --warning-text: #fde68a;
+      }
       * {
         box-sizing: border-box;
         margin: 0;
@@ -13,21 +33,24 @@
       }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #0f1117;
-        color: #e2e8f0;
-        min-width: 300px;
+        background: var(--bg);
+        color: var(--text);
+        min-width: 320px;
+        overflow-x: hidden;
+        font-size: 13px;
+        line-height: 1.5;
       }
       .header {
         background: linear-gradient(135deg, #ff9900, #ff6b00);
         padding: 14px 16px;
       }
       .header h1 {
-        font-size: 14px;
-        color: #fff;
+        font-size: 15px;
+        color: #111;
       }
       .header p {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.85);
+        font-size: 12px;
+        color: #1a1a1a;
         margin-top: 2px;
       }
       main {
@@ -37,139 +60,212 @@
         gap: 12px;
       }
       h2,
-      label.section-label {
-        font-size: 11px;
+      .section-label {
+        font-size: 12px;
         font-weight: 600;
-        color: #94a3b8;
+        color: var(--muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
         display: block;
         margin-bottom: 6px;
       }
+      h3 {
+        font-size: 13px;
+        margin: 8px 0 4px;
+      }
+      h4 {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 6px 0 2px;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--border);
+      }
+      .tab {
+        flex: 1;
+        min-height: 44px;
+        background: transparent;
+        color: var(--muted);
+        border-bottom: 3px solid transparent;
+        border-radius: 6px 6px 0 0;
+      }
+      .tab.is-active {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        background: var(--surface);
+      }
       textarea {
         width: 100%;
-        height: 180px;
-        background: #1e2330;
-        border: 1px solid #2d3748;
+        min-height: 160px;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 8px;
-        color: #e2e8f0;
+        color: var(--text);
         font-family: "Courier New", monospace;
-        font-size: 11px;
+        font-size: 12px;
         padding: 10px;
         resize: vertical;
       }
-      textarea:focus {
-        outline: none;
-        border-color: #ff9900;
+      textarea:disabled {
+        opacity: 0.7;
       }
       button {
         cursor: pointer;
-        border: none;
+        border: 1px solid var(--border);
         border-radius: 6px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
-        padding: 7px 10px;
-        background: #2d3748;
-        color: #e2e8f0;
+        padding: 8px 12px;
+        min-height: 44px;
+        background: var(--surface);
+        color: var(--text);
       }
       button:disabled {
-        opacity: 0.5;
+        opacity: 0.55;
         cursor: not-allowed;
       }
-      .btn-run {
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .btn-primary {
         width: 100%;
-        padding: 11px;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 700;
-        background: linear-gradient(135deg, #ff9900, #ff6b00);
-        color: #fff;
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #111;
       }
       .link-button {
         background: none;
-        color: #ff9900;
+        border: none;
+        color: var(--accent-strong);
         padding: 0;
-        margin-top: 6px;
         text-decoration: underline;
         font-weight: 400;
       }
-      .progress-bar {
-        height: 4px;
-        background: #2d3748;
-        border-radius: 2px;
-        overflow: hidden;
-      }
-      .progress-fill {
-        height: 100%;
-        width: 0%;
-        background: linear-gradient(90deg, #ff9900, #ff6b00);
-        transition: width 0.4s ease;
-      }
-      .progress-text {
-        font-size: 11px;
-        color: #94a3b8;
-        margin-top: 4px;
+      .notice {
+        font-size: 12px;
+        color: var(--warning-text);
+        background: var(--warning-bg);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-top: 6px;
       }
       .box {
         padding: 10px 12px;
         border-radius: 8px;
-        font-size: 12px;
-        line-height: 1.5;
+        border: 1px solid var(--border);
+        background: var(--surface);
       }
-      .box.info {
-        background: #1e3a5f;
-        border: 1px solid #2563eb;
-        color: #93c5fd;
+      .box--info {
+        background: var(--info-bg);
+        color: var(--info-text);
       }
-      .box.success {
-        background: #14532d;
-        border: 1px solid #16a34a;
-        color: #86efac;
+      .box--success {
+        background: var(--success-bg);
+        color: var(--success-text);
       }
-      .box.error {
-        background: #4c0519;
-        border: 1px solid #dc2626;
-        color: #fca5a5;
+      .box--error {
+        background: var(--error-bg);
+        color: var(--error-text);
       }
-      .box.warning {
-        background: #451a03;
-        border: 1px solid #d97706;
-        color: #fcd34d;
+      .box--warning {
+        background: var(--warning-bg);
+        color: var(--warning-text);
       }
-      .result-list {
-        margin: 6px 0 0 16px;
+      .actions,
+      .run-actions,
+      .log-actions,
+      .dialog-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .list {
+        margin: 6px 0 0 18px;
+      }
+      .service-row {
+        list-style: none;
+        margin-left: -18px;
+        padding: 4px 0 4px 8px;
+        border-left: 4px solid var(--border);
+      }
+      .service-row--in_progress {
+        border-left-color: var(--accent);
+      }
+      .service-row--confirmed {
+        border-left-color: #22c55e;
+      }
+      .service-row--failed {
+        border-left-color: #f87171;
+      }
+      .service-name {
+        font-weight: 600;
+      }
+      .severity {
+        font-weight: 700;
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+      .severity--high {
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+      .severity--medium {
+        background: var(--warning-bg);
+        color: var(--warning-text);
+      }
+      .severity--low {
+        background: var(--info-bg);
+        color: var(--info-text);
       }
       .result-link {
-        color: #ff9900;
+        color: var(--accent-strong);
         word-break: break-all;
         display: block;
-        margin-top: 8px;
+        margin: 8px 0;
       }
       .runs {
         list-style: none;
         display: flex;
         flex-direction: column;
         gap: 6px;
+        margin-top: 8px;
       }
       .run-row {
-        background: #1e2330;
-        border: 1px solid #2d3748;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 6px;
         padding: 6px 8px;
-        font-size: 11px;
+        font-size: 12px;
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         align-items: center;
         gap: 6px;
-      }
-      .run-actions,
-      .log-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
+        overflow-wrap: anywhere;
       }
       .muted {
-        font-size: 11px;
-        color: #64748b;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      details > summary {
+        cursor: pointer;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      #status-region:empty {
+        padding: 0;
+        border: 0;
+      }
+      [role="alertdialog"] {
+        border-color: var(--accent);
       }
       [hidden] {
         display: none !important;
@@ -179,79 +275,202 @@
   <body>
     <header class="header">
       <h1>AWS Calculator — Applying</h1>
-      <p>Genera tu estimado en calculator.aws desde un JSON</p>
+      <p>Genera tu estimado en calculator.aws desde un JSON o una descripción</p>
     </header>
 
     <main>
-      <section>
-        <label class="section-label" for="json-input">JSON de servicios</label>
-        <textarea
-          id="json-input"
-          data-testid="sidepanel-json-input"
-          placeholder='{"project":"Mi Proyecto","region":"us-east-1","services":[...]}'
-        ></textarea>
+      <div class="tabs" role="tablist" aria-label="Formato de entrada">
         <button
           type="button"
-          class="link-button"
-          id="btn-example"
-          data-testid="sidepanel-load-example-button"
+          class="tab is-active"
+          role="tab"
+          id="tab-json"
+          aria-selected="true"
+          aria-controls="input-panel"
+          data-testid="input-tab-json"
         >
+          JSON
+        </button>
+        <button
+          type="button"
+          class="tab"
+          role="tab"
+          id="tab-nl"
+          aria-selected="false"
+          aria-controls="input-panel"
+          tabindex="-1"
+          data-testid="input-tab-nl"
+        >
+          Lenguaje natural
+        </button>
+      </div>
+
+      <section id="input-panel" role="tabpanel" aria-labelledby="tab-json">
+        <label class="section-label" id="input-label" for="input-area">Configuración en JSON</label>
+        <textarea id="input-area" data-testid="input-area" spellcheck="false"></textarea>
+        <p id="nl-privacy-notice" class="notice" data-testid="nl-privacy-notice" hidden></p>
+        <button type="button" class="link-button" id="example-button" data-testid="example-button">
           Cargar ejemplo (EC2 t3.micro)
         </button>
       </section>
 
-      <button type="button" class="btn-run" id="btn-run" data-testid="sidepanel-run-button">
-        Generar Estimado
-      </button>
+      <div class="actions">
+        <button
+          type="button"
+          class="btn-primary"
+          id="generate-button"
+          data-testid="generate-button"
+        >
+          Generar Estimado
+        </button>
+        <button type="button" id="cancel-button" data-testid="cancel-button" hidden>
+          Cancelar
+        </button>
+      </div>
+      <p id="no-review-notice" class="notice" data-testid="no-review-notice" hidden></p>
 
-      <section id="progress" data-testid="sidepanel-progress" hidden>
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <div class="progress-text" id="progress-text" data-testid="sidepanel-progress-text"></div>
-      </section>
-
-      <div id="status" class="box info" data-testid="sidepanel-status" role="status" hidden></div>
       <div
-        id="log-warning"
-        class="box warning"
-        data-testid="sidepanel-log-warning"
+        id="status-region"
+        class="box box--info"
         role="status"
-        hidden
+        aria-live="polite"
+        aria-busy="false"
+        data-testid="status-region"
       ></div>
+      <p id="notice" class="box box--info" role="status" data-testid="panel-notice" hidden></p>
 
-      <section id="result" class="box" data-testid="sidepanel-result" hidden>
-        <p class="muted" id="result-caption"></p>
-        <p id="result-title" data-testid="sidepanel-result-title"></p>
-        <ul class="result-list" id="result-list" data-testid="sidepanel-result-list"></ul>
-        <div id="result-url" hidden>
-          <a
-            id="result-link"
-            class="result-link"
-            data-testid="sidepanel-result-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          ></a>
-          <button type="button" id="btn-copy" data-testid="sidepanel-copy-url-button">
-            Copiar URL
+      <section
+        id="cancel-confirm"
+        class="box"
+        role="alertdialog"
+        aria-labelledby="cancel-confirm-text"
+        hidden
+      >
+        <p id="cancel-confirm-text"></p>
+        <div class="dialog-actions">
+          <button type="button" id="cancel-confirm-button" data-testid="cancel-confirm-button">
+            Sí, cancelar
+          </button>
+          <button type="button" id="cancel-dismiss-button" data-testid="cancel-dismiss-button">
+            Seguir con la corrida
           </button>
         </div>
       </section>
 
-      <section>
-        <h2>Registro técnico</h2>
-        <p class="muted" id="runs-total" data-testid="sidepanel-runs-total-size"></p>
-        <ul class="runs" id="runs-list" data-testid="sidepanel-runs-list"></ul>
-        <div class="log-actions" style="margin-top: 8px">
-          <button type="button" id="btn-export-all" data-testid="sidepanel-export-all-button">
+      <section id="error-view" class="box box--error" data-testid="error-view" hidden>
+        <p id="error-message" role="alert" tabindex="-1" data-testid="error-message"></p>
+        <ul id="error-fragments" class="list" data-testid="error-fragments" hidden></ul>
+      </section>
+
+      <section id="preview" class="box" data-testid="preview" hidden>
+        <h2>Vista previa</h2>
+        <ul id="preview-meta" class="list"></ul>
+        <ul id="preview-list" class="list" data-testid="preview-services"></ul>
+        <p id="review-notice" class="muted" hidden></p>
+      </section>
+
+      <section id="review-findings" class="box" data-testid="review-findings" hidden>
+        <h2>Revisión Well-Architected</h2>
+        <div id="review-findings-list"></div>
+      </section>
+
+      <section id="progress" class="box" data-testid="service-list" hidden>
+        <h2>Progreso</h2>
+        <ul id="progress-list" class="list" aria-live="off"></ul>
+      </section>
+      <p id="log-warning" class="box box--warning" role="status" hidden></p>
+
+      <section id="result" class="box" data-testid="result" hidden>
+        <p id="result-title" class="service-name" data-testid="result-title"></p>
+        <p id="result-message" role="alert" tabindex="-1" data-testid="result-message" hidden></p>
+        <div id="result-url" hidden>
+          <button type="button" id="copy-url-button" data-testid="copy-url-button">
+            Copiar URL
+          </button>
+          <span id="copy-status" class="muted" role="status"></span>
+        </div>
+        <p id="result-missing" hidden></p>
+        <ul id="result-services" class="list" data-testid="result-services"></ul>
+      </section>
+
+      <section id="waf" class="box" data-testid="waf-panel" hidden>
+        <h2>Evaluación Well-Architected</h2>
+        <div id="waf-list"></div>
+      </section>
+
+      <div id="actions" class="actions" data-testid="actions" hidden>
+        <button
+          type="button"
+          class="btn-primary"
+          id="preview-continue-button"
+          data-testid="preview-continue-button"
+          hidden
+        >
+          Revisar y generar
+        </button>
+        <button type="button" id="login-button" data-testid="login-button" hidden>
+          Iniciar sesión
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          id="fill-anyway-button"
+          data-testid="fill-anyway-button"
+          hidden
+        >
+          Llenar igual
+        </button>
+        <button type="button" id="correct-button" data-testid="correct-button" hidden>
+          Corregir
+        </button>
+        <button type="button" id="review-retry-button" data-testid="review-retry-button" hidden>
+          Reintentar
+        </button>
+        <button
+          type="button"
+          id="connection-retry-button"
+          data-testid="connection-retry-button"
+          hidden
+        >
+          Reintentar
+        </button>
+        <button type="button" id="retry-button" data-testid="retry-button" hidden>
+          Reintentar
+        </button>
+        <button type="button" id="retry-waf-button" data-testid="retry-waf-button" hidden>
+          Reintentar evaluación
+        </button>
+        <button type="button" id="back-button" data-testid="back-button" hidden>Volver</button>
+        <button type="button" id="new-run-button" data-testid="new-run-button" hidden>
+          Nueva corrida
+        </button>
+      </div>
+
+      <details id="last-run">
+        <summary data-testid="last-run-toggle">Última corrida</summary>
+        <div id="last-run-body"></div>
+      </details>
+
+      <details id="history">
+        <summary data-testid="history-toggle">Historial de corridas</summary>
+        <p class="muted" id="history-summary"></p>
+        <ul class="runs" id="history-list" data-testid="history-list"></ul>
+        <div class="log-actions">
+          <button type="button" id="history-export-button" data-testid="history-export-button">
             Exportar todo
           </button>
-          <button type="button" id="btn-delete-all" data-testid="sidepanel-delete-all-button">
+          <button
+            type="button"
+            id="history-delete-all-button"
+            data-testid="history-delete-all-button"
+          >
             Borrar todo
           </button>
-          <button type="button" id="btn-repair" data-testid="sidepanel-repair-index-button">
+          <button type="button" id="history-repair-button" data-testid="history-repair-button">
             Reparar índice
           </button>
         </div>
-      </section>
+      </details>
     </main>
 
     <script type="module" src="sidepanel.js"></script>

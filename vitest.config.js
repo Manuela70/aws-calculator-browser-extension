@@ -40,6 +40,12 @@ export default defineConfig({
         "aws-calculator-extension/lib/connection/handshake.js",
         "aws-calculator-extension/lib/panel/panel-state.js",
         "aws-calculator-extension/lib/panel/heartbeat.js",
+        // U6: Zona A del panel (NFR6.1).
+        "aws-calculator-extension/lib/panel/url-check.js",
+        "aws-calculator-extension/lib/panel/history-model.js",
+        "aws-calculator-extension/lib/panel/timers.js",
+        "aws-calculator-extension/lib/panel/session-rule.js",
+        "aws-calculator-extension/lib/panel/waf-model.js",
         // U7: cliente del cerebro en el service worker y adaptador de página (NFR6.1).
         "aws-calculator-extension/sw/**",
         "aws-calculator-extension/lib/connection/brain-port.js",
@@ -56,6 +62,9 @@ export default defineConfig({
           { lines: 80, branches: 80 },
         // Umbral propio de U5 (NFR6.1): líneas y ramas sobre sus seis módulos de Zona A.
         "aws-calculator-extension/lib/{rpa/orchestrator,rpa/result-aggregator,rpa/retry,rpa/service-timer,dom/aria-label,dom/cascade}.js":
+          { lines: 80, branches: 80 },
+        // Umbral propio de U6 (NFR6.1): líneas y ramas sobre sus siete módulos de Zona A.
+        "aws-calculator-extension/lib/{panel/panel-state,panel/url-check,panel/history-model,panel/timers,panel/session-rule,panel/waf-model,messages-es}.js":
           { lines: 80, branches: 80 },
         // Umbral propio de U7 (NFR6.1): líneas y ramas sobre el service worker y brain-port.
         "aws-calculator-extension/sw/**": { lines: 80, branches: 80 },

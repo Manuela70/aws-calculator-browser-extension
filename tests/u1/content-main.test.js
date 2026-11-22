@@ -22,7 +22,7 @@ function setup({ runEstimateFn } = {}) {
     runEstimateFn:
       runEstimateFn ??
       (async (runRequest, deps) => {
-        deps.progress(50, "Configurando Amazon EC2 (1/1)…");
+        deps.progress({ step: "adding_service", serviceIndex: 0, serviceCount: 1 });
         return {
           runId: runRequest.runId,
           status: "DONE",
@@ -83,7 +83,7 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     let seenActiveRun = null;
     const { storage, main } = setup({
       runEstimateFn: async (runRequest, deps) => {
-        deps.progress(40, "Aplicando…");
+        deps.progress({ step: "applying_action", serviceIndex: 0, serviceCount: 1 });
         await new Promise((resolve) => setTimeout(resolve, 0));
         seenActiveRun = storage.data.get("activeRun");
         return {
@@ -99,7 +99,7 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     expect(seenActiveRun).toMatchObject({
       runId: "run-test-1",
       tabId: 7,
-      lastProgress: { pct: 40 },
+      lastProgress: { step: "applying_action", serviceIndex: 0 },
     });
     expect(storage.data.has("activeRun")).toBe(false);
   });
@@ -131,7 +131,7 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     expect(result).toMatchObject({ status: "ERROR", failureStep: "services" });
     const countBefore = chromeApi.runtime.messages.length;
     const writesBefore = storage.operations.length;
-    lateProgress(99, "tarde");
+    lateProgress({ step: "saving", serviceIndex: 0, serviceCount: 1 });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(chromeApi.runtime.messages.length).toBe(countBefore);
     expect(storage.operations.length).toBe(writesBefore);
@@ -150,12 +150,13 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     expect(consoleApi.calls.some((c) => c.level === "debug")).toBe(true);
   });
 
-  it("CANCEL_RPA aborta solo la corrida en curso y el progreso estructurado conserva el texto (U5)", async () => {
+  it("CANCEL_RPA aborta solo la corrida en curso y el progreso es solo estructurado (U5, U6)", async () => {
     let seenSignal;
     const { chromeApi, main } = setup({
       runEstimateFn: async (runRequest, deps) => {
         seenSignal = deps.context.signal;
         deps.progress({ step: "adding_service", pct: 20, text: "Configurando…", serviceCount: 1 });
+        deps.progress(40, "forma de U1 retirada");
         deps.progress({ step: "mapping_pass", serviceIndex: 0, serviceCount: 1 });
         await new Promise((resolve) => deps.context.signal.addEventListener("abort", resolve));
         return {
@@ -176,7 +177,15 @@ describe("content-main (W3, BR6.1, BR6.3, BR6.6)", () => {
     const result = await main.whenIdle();
     expect(result.failureDetail).toBe("cancelled");
     const progress = chromeApi.runtime.messages.filter((m) => m.type === "PROGRESS");
-    expect(progress.at(-1)).toMatchObject({ step: "mapping_pass", pct: 20, text: "Configurando…" });
+    expect(progress).toHaveLength(2);
+    expect(progress[0]).toEqual({
+      type: "PROGRESS",
+      runId: "run-test-1",
+      step: "adding_service",
+      serviceCount: 1,
+    });
+    expect(progress.at(-1)).toMatchObject({ step: "mapping_pass", serviceIndex: 0 });
+    expect(progress.some((m) => "pct" in m || "text" in m)).toBe(false);
     expect(main.handleMessage(makeCancelRpa("run-test-1"), OWN)).toEqual({ cancelled: false });
   });
 });

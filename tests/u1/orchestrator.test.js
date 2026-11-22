@@ -33,10 +33,13 @@ describe("orchestrator (W3/W4)", () => {
     expect(dom.calls.find((c) => c.name === "setRegion").args[0]).toBe("US East (N. Virginia)");
     expect(dom.calls.filter((c) => c.name === "applyAction")).toHaveLength(4);
     expect(names.indexOf("renameEstimate")).toBeLessThan(names.indexOf("shareEstimate"));
-    // U5: el progreso es estructurado (decisión 2) y conserva pct y text.
-    expect(progress).toHaveBeenLastCalledWith(
-      expect.objectContaining({ step: "sharing", pct: 100, text: "Estimado listo." }),
-    );
+    // El progreso es estructurado (decisión 2 de U5) y sin pct ni text (decisión 7 de U6).
+    expect(progress).toHaveBeenLastCalledWith({
+      runId: "run-test-1",
+      step: "sharing",
+      serviceCount: 1,
+    });
+    expect(progress.mock.calls.some(([event]) => "pct" in event || "text" in event)).toBe(false);
     expect(runResult.perServiceResults[0].durationMs).toBeGreaterThanOrEqual(0);
     expect(runResult.missing).toEqual([]);
     expect(names).toContain("cleanup");

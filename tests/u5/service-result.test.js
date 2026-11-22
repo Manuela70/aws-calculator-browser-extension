@@ -100,7 +100,7 @@ describe("buildServiceResult", () => {
 });
 
 describe("buildProgressEvent (BR4.2, decisión 2)", () => {
-  it("arma un evento estructurado por servicio y paso, con pct y text para el panel actual", () => {
+  it("arma un evento estructurado por servicio y paso, sin pct ni text (decisión 7 de U6)", () => {
     const event = buildProgressEvent({
       runId: "r1",
       step: "applying_action",
@@ -120,8 +120,6 @@ describe("buildProgressEvent (BR4.2, decisión 2)", () => {
       requestId: "svc-2",
       label: "Number of requests",
       serviceStatus: "in_progress",
-      pct: 40,
-      text: "Aplicando Number of requests = 1000…",
     });
   });
 

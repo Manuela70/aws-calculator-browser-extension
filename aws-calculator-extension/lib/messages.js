@@ -51,12 +51,6 @@ export function makeRunRpaResponse(accepted, reason) {
   return accepted ? { accepted: true } : { accepted: false, reason };
 }
 
-function clampPct(pct) {
-  const value = Math.round(Number(pct));
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(100, Math.max(0, value));
-}
-
 // CANCEL_RPA { runId }: solo para la corrida en curso (decisión 7 del plan).
 export function makeCancelRpa(runId) {
   return { type: MESSAGE_TYPES.CANCEL_RPA, runId };
@@ -86,15 +80,15 @@ const PROGRESS_FIELDS = Object.freeze([
   "requestId",
 ]);
 
-// ProgressEvent (entities.md). Conserva pct y text para el panel actual y copia
-// los campos estructurados que traiga extra. logDegraded avisa al panel que
-// parte del registro técnico no se pudo guardar (observability-design §2).
-export function makeProgressEvent(runId, pct, text, extra = {}) {
-  const event = { runId, pct: clampPct(pct), text: String(text ?? "") };
+// ProgressEvent (entities.md): solo los campos estructurados, sin pct ni text
+// (decisión 7 de U6; el panel arma el texto del paso). logDegraded avisa al
+// panel que parte del registro técnico no se pudo guardar (observability-design §2).
+export function makeProgressEvent(runId, fields = {}) {
+  const event = { runId };
   for (const field of PROGRESS_FIELDS) {
-    if (extra[field] !== undefined) event[field] = extra[field];
+    if (fields[field] !== undefined) event[field] = fields[field];
   }
-  if (extra.logDegraded === true) event.logDegraded = true;
+  if (fields.logDegraded === true) event.logDegraded = true;
   return event;
 }
 
