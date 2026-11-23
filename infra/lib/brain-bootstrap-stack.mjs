@@ -21,14 +21,18 @@ export const JOB_FUNCTION_NAME = "brain-inventory-job";
 export class BrainBootstrapStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
-    const { githubRepo, bedrockRoleArn } = props;
+    const { githubRepo, bedrockRoleArn, reuseGithubOidcProvider = false } = props;
     const account = this.account;
     const region = this.region;
 
-    const provider = new iam.CfnOIDCProvider(this, "GithubOidcProvider", {
-      url: `https://${GITHUB_OIDC_HOST}`,
-      clientIdList: ["sts.amazonaws.com"],
-    });
+    // Una cuenta admite un solo proveedor OIDC por URL: si ya existe (otro proyecto
+    // con GitHub Actions), se reutiliza por su ARN en vez de crearlo.
+    const providerArn = reuseGithubOidcProvider
+      ? `arn:${Aws.PARTITION}:iam::${account}:oidc-provider/${GITHUB_OIDC_HOST}`
+      : new iam.CfnOIDCProvider(this, "GithubOidcProvider", {
+          url: `https://${GITHUB_OIDC_HOST}`,
+          clientIdList: ["sts.amazonaws.com"],
+        }).attrArn;
 
     const repository = new ecr.Repository(this, "BrainApiRepository", {
       repositoryName: ECR_REPOSITORY_NAME,
@@ -52,7 +56,7 @@ export class BrainBootstrapStack extends Stack {
     );
 
     const githubPrincipal = (sub) =>
-      new iam.WebIdentityPrincipal(provider.attrArn, {
+      new iam.WebIdentityPrincipal(providerArn, {
         StringEquals: {
           [`${GITHUB_OIDC_HOST}:aud`]: "sts.amazonaws.com",
           [`${GITHUB_OIDC_HOST}:sub`]: sub,

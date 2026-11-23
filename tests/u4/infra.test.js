@@ -218,6 +218,23 @@ describe("IaC del cerebro (cdk synth)", () => {
   });
 });
 
+describe("arranque con un proveedor OIDC de GitHub ya existente", () => {
+  it("lo reutiliza por ARN y no crea otro", () => {
+    const built = buildBrainApp({
+      account: "111111111111",
+      region: "us-east-1",
+      params: { ...exampleParams(), reuseGithubOidcProvider: "true" },
+      costInputs: exampleCosts(),
+    });
+    const template = Template.fromStack(built.bootstrap);
+    template.resourceCountIs("AWS::IAM::OIDCProvider", 0);
+    const role = Object.values(template.findResources("AWS::IAM::Role"))[0];
+    expect(JSON.stringify(role.Properties.AssumeRolePolicyDocument)).toMatch(
+      /oidc-provider\/token\.actions\.githubusercontent\.com/,
+    );
+  }, 120_000);
+});
+
 describe("parámetros de despliegue (R3)", () => {
   it("falla con un mensaje claro si falta un parámetro o si el formato es inválido", () => {
     const params = exampleParams();

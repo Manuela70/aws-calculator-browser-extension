@@ -89,6 +89,7 @@ export function buildBrainApp({
     stackName: "brain-bootstrap",
     githubRepo: params.githubRepo,
     bedrockRoleArn: params.bedrockRoleArn,
+    reuseGithubOidcProvider: params.reuseGithubOidcProvider === "true",
   });
   const brain = new BrainStack(app, "BrainStack", {
     env,
