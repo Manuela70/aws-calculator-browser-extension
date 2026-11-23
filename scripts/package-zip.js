@@ -7,7 +7,7 @@
 // Solo herramienta de desarrollo; no forma parte del bundle.
 
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +15,9 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const BUNDLE_DIR = join(ROOT, "aws-calculator-extension");
 const DIST_DIR = join(ROOT, "dist");
 
-const toPosix = (path) => path.split(sep).join("/");
+// Acepta separadores de Windows en cualquier sistema (los nombres del bundle no
+// llevan barra invertida).
+const toPosix = (path) => path.replace(/\\/g, "/");
 
 function isExcluded(relPath) {
   const segments = relPath.split("/");

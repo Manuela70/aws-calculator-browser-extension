@@ -21,8 +21,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Instalar dev-dependencies
-        run: npm ci
+          cache-dependency-path: |
+            package-lock.json
+            brain/package-lock.json
+            infra/package-lock.json
+      # La suite completa incluye las pruebas del cerebro (u4), que importan las
+      # dependencias de brain/ e infra/.
+      - name: Instalar dependencias (raíz, brain, infra)
+        run: |
+          npm ci
+          npm ci --prefix brain
+          npm ci --prefix infra
       - name: Auditoría de dependencias
         run: npm audit --audit-level=high
       - name: Formato

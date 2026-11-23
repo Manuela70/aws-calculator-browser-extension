@@ -1,0 +1,3 @@
+# Falso positivo: prefijo ficticio de una clave pública RSA en una prueba de check-bundle
+# (no es un secreto; la clave real de la extensión es pública por diseño).
+7c5de6981df8ded11a088d9a973785483b77eefd:tests/u7/check-bundle.test.js:generic-api-key:81
