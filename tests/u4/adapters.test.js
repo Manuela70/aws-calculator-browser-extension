@@ -181,6 +181,25 @@ describe("bedrock-client", () => {
     expect(body).not.toHaveProperty("temperature");
   });
 
+  it("registra nombre y estado HTTP del error de Bedrock, nunca el mensaje", async () => {
+    const error = sdkError("ValidationException", 400);
+    error.message = "texto del pedido del cliente";
+    const lines = [];
+    const client = createBedrockClient({
+      runtime: { send: async () => Promise.reject(error) },
+      modelId: "m",
+      anthropicVersion: "v",
+      log: (record) => lines.push(record),
+    });
+    await expect(client.invoke({ system: "S", user: "U", maxTokens: 5 })).rejects.toBeInstanceOf(
+      ModelError,
+    );
+    expect(lines).toEqual([
+      { event: "bedrock_error", kind: "client", name: "ValidationException", status: 400 },
+    ]);
+    expect(JSON.stringify(lines)).not.toMatch(/pedido del cliente/);
+  });
+
   it("clasifica throttling, 5xx, aborto y errores del cliente sin copiar el mensaje", async () => {
     const cases = [
       [sdkError("ThrottlingException", 429), "throttled"],

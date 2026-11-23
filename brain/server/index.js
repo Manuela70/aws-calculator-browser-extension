@@ -46,6 +46,7 @@ function main() {
     modelId: model.modelId,
     anthropicVersion: model.anthropicVersion,
     effort: model.effort,
+    log,
   });
   const inventoryStore = createInventoryStore({
     s3: new S3Client({ region }),

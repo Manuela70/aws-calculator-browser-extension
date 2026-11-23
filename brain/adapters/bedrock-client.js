@@ -45,7 +45,21 @@ export function buildRequestBody({ anthropicVersion, maxTokens, effort, system, 
   return body;
 }
 
-export function createBedrockClient({ runtime, modelId, anthropicVersion, effort }) {
+// Metadatos del error de Bedrock para el registro: nombre y estado HTTP del SDK,
+// nunca el mensaje (puede citar el pedido).
+export function bedrockErrorInfo(error) {
+  const name = typeof error?.name === "string" ? error.name.slice(0, 64) : "Unknown";
+  const status = error?.$metadata?.httpStatusCode;
+  return { name, status: Number.isInteger(status) ? status : null };
+}
+
+export function createBedrockClient({
+  runtime,
+  modelId,
+  anthropicVersion,
+  effort,
+  log = () => {},
+}) {
   return {
     async invoke({ system, user, maxTokens, signal }) {
       const body = buildRequestBody({ anthropicVersion, maxTokens, effort, system, user });
@@ -61,7 +75,9 @@ export function createBedrockClient({ runtime, modelId, anthropicVersion, effort
           { abortSignal: signal },
         );
       } catch (error) {
-        throw new ModelError(classifyBedrockError(error, signal), { cause: error });
+        const kind = classifyBedrockError(error, signal);
+        if (kind !== "aborted") log({ event: "bedrock_error", kind, ...bedrockErrorInfo(error) });
+        throw new ModelError(kind, { cause: error });
       }
       let payload;
       try {
