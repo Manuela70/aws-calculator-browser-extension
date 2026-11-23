@@ -181,7 +181,13 @@ export async function callBrain({ operation, body, signal }, deps) {
     session,
     keepalive,
     fetchFn = (...args) => fetch(...args),
-    clock = { now: () => Date.now(), setTimeout, clearTimeout },
+    // Envueltos: en Chrome, setTimeout llamado como método de otro objeto lanza
+    // "Illegal invocation".
+    clock = {
+      now: () => Date.now(),
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+      clearTimeout: (id) => clearTimeout(id),
+    },
     logger = console,
   } = deps;
   if (!Object.hasOwn(OPERATION_PATHS, operation)) {

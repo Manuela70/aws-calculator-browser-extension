@@ -39,6 +39,36 @@ const errorBody = (code, extra = {}) => ({ code, message: "x", requestId: "srv-1
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
+describe("sw/brain-client reloj por defecto", () => {
+  it("no llama a setTimeout como método de otro objeto (Chrome: Illegal invocation)", async () => {
+    const realSet = globalThis.setTimeout;
+    const realClear = globalThis.clearTimeout;
+    function strict(fn) {
+      return function (...args) {
+        if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+        return fn(...args);
+      };
+    }
+    vi.stubGlobal("setTimeout", strict(realSet));
+    vi.stubGlobal("clearTimeout", strict(realClear));
+    try {
+      const result = await callBrain(
+        { operation: "map-residue", body: { service: "Amazon EC2" } },
+        {
+          config: TEST_CONFIG,
+          session: createFakeSession({ token: TOKEN }),
+          keepalive: createCountingKeepalive(),
+          fetchFn: createFakeFetch([makeResponse(200, residueOk)]),
+          logger: silentLogger(),
+        },
+      );
+      expect(result.ok).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("sw/brain-client translateResponse", () => {
   it("traduce cada código del cerebro a su mensaje en español con requestId", () => {
     for (const code of SERVER_ERROR_CODES) {
