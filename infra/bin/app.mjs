@@ -29,7 +29,7 @@ const context = (name) => app.node.tryGetContext(name);
 try {
   const fileParams = readParamsFile(resolve(INFRA_DIR, context("params") ?? "deploy-params.json"));
   const overrides = Object.fromEntries(
-    [...PARAM_NAMES, "bedrockRoleArn", "reuseGithubOidcProvider"]
+    [...PARAM_NAMES, "bedrockRoleArn", "reuseGithubOidcProvider", "githubSubjectPrefix"]
       .filter((name) => context(name) !== undefined)
       .map((name) => [name, String(context(name))]),
   );

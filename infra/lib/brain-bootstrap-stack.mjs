@@ -21,7 +21,16 @@ export const JOB_FUNCTION_NAME = "brain-inventory-job";
 export class BrainBootstrapStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
-    const { githubRepo, bedrockRoleArn, reuseGithubOidcProvider = false } = props;
+    const {
+      githubRepo,
+      githubSubjectPrefix,
+      bedrockRoleArn,
+      reuseGithubOidcProvider = false,
+    } = props;
+    // Prefijo del claim `sub` del token OIDC. Por defecto `repo:<owner>/<repo>`; un repo
+    // con subject inmutable de GitHub usa `repo:<owner>@<id>/<repo>@<id>` (lo informa
+    // GET /repos/<owner>/<repo>/actions/oidc/customization/sub).
+    const subject = githubSubjectPrefix ?? `repo:${githubRepo}`;
     const account = this.account;
     const region = this.region;
 
@@ -69,7 +78,7 @@ export class BrainBootstrapStack extends Stack {
     const buildRole = new iam.Role(this, "GithubBrainBuildRole", {
       roleName: "github-brain-build",
       description: "GitHub Actions (rama main): imagen en ECR y cdk diff",
-      assumedBy: githubPrincipal(`repo:${githubRepo}:ref:refs/heads/main`),
+      assumedBy: githubPrincipal(`${subject}:ref:refs/heads/main`),
       maxSessionDuration: Duration.hours(1),
     });
     // ecr:GetAuthorizationToken no admite un recurso más acotado que "*" (lo exige ECR).
@@ -130,7 +139,7 @@ export class BrainBootstrapStack extends Stack {
     const deployRole = new iam.Role(this, "GithubBrainDeployRole", {
       roleName: "github-brain-deploy",
       description: "GitHub Actions (entorno production): cdk deploy y smoke",
-      assumedBy: githubPrincipal(`repo:${githubRepo}:environment:production`),
+      assumedBy: githubPrincipal(`${subject}:environment:production`),
       maxSessionDuration: Duration.hours(1),
     });
     deployRole.addToPolicy(

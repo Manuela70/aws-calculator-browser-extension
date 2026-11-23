@@ -58,7 +58,7 @@ Dos Lambdas ARM64 con la misma imagen de ECR (este directorio) y AWS Lambda Web 
    `cdk bootstrap aws://<cuenta>/us-east-1 --cloudformation-execution-policies arn:aws:iam::<cuenta>:policy/BrainCfnExecutionPolicy`
 4. **Stack de arranque** `brain-bootstrap` (proveedor OIDC de GitHub, roles `github-brain-build` y `github-brain-deploy`, ECR `brain-api` con permiso de descarga solo para las Lambdas `brain-*`), desplegado a mano:
    `npx cdk deploy BrainBootstrapStack -c githubRepo=<org>/<repo> ...`
-   Si la cuenta ya tiene el proveedor OIDC de GitHub (otro proyecto), agregar `"reuseGithubOidcProvider": "true"` a `deploy-params.json`.
+   Si la cuenta ya tiene el proveedor OIDC de GitHub (otro proyecto), agregar `"reuseGithubOidcProvider": "true"` a `deploy-params.json`. Si el repo usa el subject inmutable de OIDC (lo informa `gh api repos/<owner>/<repo>/actions/oidc/customization/sub`), agregar su prefijo como `"githubSubjectPrefix"`.
 5. **Modelo de Claude habilitado en Amazon Bedrock (us-east-1)**. `config.json` (`model.modelId`) es la única fuente del modelo: se actualiza a mano con un commit. Admite un modelo directo o un perfil de inferencia (`us.…`); la IaC arma el permiso para cualquiera de los dos y el job `diff` del workflow verifica que esté activo antes de pedir la aprobación. Si Bedrock está en otra cuenta, desplegar allí `infra/cross-account/bedrock-invoke-role.yaml` y pasar su `RoleArn` como `bedrockRoleArn`.
 6. **Registro de invocaciones de Bedrock desactivado** en la cuenta (guardaría prompts con datos del cliente).
 7. **Par de claves `key` de la extensión** (u7): fija el identificador estable que usa la URL de retorno de Cognito (`https://<id>.chromiumapp.org/`) y el origen permitido por CORS.

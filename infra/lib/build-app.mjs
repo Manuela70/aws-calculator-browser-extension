@@ -26,6 +26,7 @@ const PARAM_PATTERNS = {
   imageTag: /^[\w.-]{1,128}$/,
 };
 
+const GITHUB_SUBJECT_PREFIX = /^repo:[\w.-]+(@\d+)?\/[\w.-]+(@\d+)?$/;
 const BEDROCK_ROLE_ARN = /^arn:aws[\w-]*:iam::\d{12}:role\/[\w+=,.@/-]{1,128}$/;
 
 export class DeployParamsError extends Error {
@@ -58,6 +59,15 @@ export function validateParams(params) {
   if (params.bedrockRoleArn !== undefined && !BEDROCK_ROLE_ARN.test(params.bedrockRoleArn)) {
     throw new DeployParamsError("Parámetro de despliegue con formato inválido: bedrockRoleArn.");
   }
+  // Opcional: prefijo del `sub` de GitHub con subject inmutable.
+  if (
+    params.githubSubjectPrefix !== undefined &&
+    !GITHUB_SUBJECT_PREFIX.test(params.githubSubjectPrefix)
+  ) {
+    throw new DeployParamsError(
+      "Parámetro de despliegue con formato inválido: githubSubjectPrefix.",
+    );
+  }
   return params;
 }
 
@@ -88,6 +98,7 @@ export function buildBrainApp({
     env,
     stackName: "brain-bootstrap",
     githubRepo: params.githubRepo,
+    githubSubjectPrefix: params.githubSubjectPrefix,
     bedrockRoleArn: params.bedrockRoleArn,
     reuseGithubOidcProvider: params.reuseGithubOidcProvider === "true",
   });

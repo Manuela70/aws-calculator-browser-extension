@@ -235,6 +235,30 @@ describe("arranque con un proveedor OIDC de GitHub ya existente", () => {
   }, 120_000);
 });
 
+describe("subject inmutable de GitHub (githubSubjectPrefix)", () => {
+  it("usa el prefijo para la rama main y el entorno production, y rechaza uno inválido", () => {
+    const prefix = "repo:example-org@123/aws-calculator-extension@456";
+    const built = buildBrainApp({
+      account: "111111111111",
+      region: "us-east-1",
+      params: { ...exampleParams(), githubSubjectPrefix: prefix },
+      costInputs: exampleCosts(),
+    });
+    const subs = Object.values(Template.fromStack(built.bootstrap).findResources("AWS::IAM::Role"))
+      .map(
+        (r) =>
+          r.Properties.AssumeRolePolicyDocument.Statement[0].Condition.StringEquals[
+            "token.actions.githubusercontent.com:sub"
+          ],
+      )
+      .sort();
+    expect(subs).toEqual([`${prefix}:environment:production`, `${prefix}:ref:refs/heads/main`]);
+    expect(() => validateParams({ ...exampleParams(), githubSubjectPrefix: "repo:*" })).toThrow(
+      /githubSubjectPrefix/,
+    );
+  }, 120_000);
+});
+
 describe("parámetros de despliegue (R3)", () => {
   it("falla con un mensaje claro si falta un parámetro o si el formato es inválido", () => {
     const params = exampleParams();
