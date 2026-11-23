@@ -7,6 +7,9 @@
 //   referencia en un único paso;
 // - si la recarga falla conserva la última versión buena y emite
 //   InventoryReloadFailed; en cada lectura del puntero emite InventoryAgeDays.
+// En Lambda la instancia queda congelada entre invocaciones y los temporizadores
+// casi no corren: refreshIfDue() aplica los mismos intervalos (30 s sin inventario,
+// 5 min con inventario) medidos con el reloj, disparado por cada petición.
 
 import { indexInventory, snapshotAgeDays } from "./inventory-model.js";
 
@@ -22,6 +25,8 @@ export function createInventoryLoader({
   let current = null; // { snapshot, index, sha256 }
   let timer = null;
   let stopped = false;
+  let lastAttemptMs = Number.NEGATIVE_INFINITY;
+  let inFlight = null;
   const readyWaiters = new Set();
 
   async function loadVersion(ref) {
@@ -86,8 +91,22 @@ export function createInventoryLoader({
     timer = timers.setTimeout(fn, ms);
   }
 
+  function attempt(fn) {
+    lastAttemptMs = clock.now();
+    inFlight = fn().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  }
+
+  async function initialWithAge() {
+    const ok = await loadInitial();
+    if (ok) emitAge();
+    return ok;
+  }
+
   async function startupCycle() {
-    if (await loadInitial()) {
+    if (await attempt(initialWithAge)) {
       emitAge();
       schedule(reloadCycle, reloadMs);
     } else {
@@ -96,7 +115,7 @@ export function createInventoryLoader({
   }
 
   async function reloadCycle() {
-    await reload();
+    await attempt(reload);
     schedule(reloadCycle, reloadMs);
   }
 
@@ -115,6 +134,15 @@ export function createInventoryLoader({
 
     loadInitial,
     reload,
+
+    // Recarga si ya pasó el intervalo desde el último intento (o se suma al que
+    // está en curso). Devuelve una promesa que nunca rechaza.
+    refreshIfDue() {
+      if (inFlight) return inFlight;
+      const interval = current ? reloadMs : startupRetryMs;
+      if (clock.now() - lastAttemptMs < interval) return Promise.resolve(false);
+      return attempt(current ? reload : initialWithAge);
+    },
 
     // Espera a que haya una versión cargada, como máximo `ms` (tope de arranque de 4 s).
     waitReady(ms) {

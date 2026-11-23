@@ -230,6 +230,35 @@ describe("InventoryLoader (NFR1.8)", () => {
     loader.stop();
   });
 
+  it("en Lambda (temporizadores congelados) recarga por petición según el reloj: 30 s sin inventario, 5 min con él", async () => {
+    const store = memoryInventoryStore();
+    let now = Date.parse("2026-11-22T12:00:00.000Z");
+    const frozenTimers = { setTimeout: () => 0, clearTimeout: () => {} };
+    const loader = createInventoryLoader({
+      store,
+      parse,
+      clock: { now: () => now },
+      config: LOADER_CONFIG,
+      timers: frozenTimers,
+    });
+    await loader.start(); // sin inventario todavía
+    store.setPointer({ ...storedVersion(store, "2026-11-21"), previous: null });
+    now += 10_000;
+    expect(await loader.refreshIfDue()).toBe(false); // antes de 30 s no reintenta
+    expect(loader.getInventory()).toBeNull();
+    now += 20_000;
+    expect(await loader.refreshIfDue()).toBe(true);
+    expect(loader.getInventory().version).toBe("2026-11-21");
+    store.setPointer({ ...storedVersion(store, "2026-11-28"), previous: null });
+    now += 60_000;
+    expect(await loader.refreshIfDue()).toBe(false); // con inventario, cada 5 min
+    now += 240_000;
+    const [first, second] = [loader.refreshIfDue(), loader.refreshIfDue()];
+    expect(first).toBe(second); // un solo intento en curso
+    expect(await first).toBe(true);
+    expect(loader.getInventory().version).toBe("2026-11-28");
+  });
+
   it("una versión activa dañada en la recarga conserva la última versión buena", async () => {
     const store = memoryInventoryStore();
     const good = storedVersion(store, "2026-11-21");

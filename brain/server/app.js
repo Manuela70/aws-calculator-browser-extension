@@ -218,8 +218,13 @@ export function createBrainApp({
     const arrival = clock.now();
     const requestId = newRequestId();
     const path = (req.url ?? "").split("?")[0];
+    // Recarga del inventario guiada por las peticiones (en Lambda los temporizadores
+    // no corren con la instancia congelada). Las operaciones esperan el inventario
+    // con waitReady; /health espera este intento si aún no hay versión.
+    const refresh = loader.refreshIfDue?.() ?? Promise.resolve(false);
     if (req.method === "GET" && path === "/health") {
-      handleHealth(res, requestId);
+      if (loader.health().ready) handleHealth(res, requestId);
+      else refresh.then(() => handleHealth(res, requestId));
       return;
     }
     const route = Object.hasOwn(ROUTES, path) ? ROUTES[path] : null;
