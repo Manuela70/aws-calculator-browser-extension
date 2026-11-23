@@ -118,6 +118,12 @@ describe("IaC del cerebro (cdk synth)", () => {
     expect([].concat(invoke.Resource)).not.toContain("*");
   });
 
+  it("los roles de la API y del job pueden listar el bucket (404 en vez de 403 sin inventario)", () => {
+    const list = policyStatements(brain).filter((s) => s.Action === "s3:ListBucket");
+    expect(list).toHaveLength(2);
+    for (const s of list) expect(s.Resource).not.toBe("*");
+  });
+
   it("conserva el bucket del inventario y la tabla de uso (RETAIN)", () => {
     brain.hasResource("AWS::S3::Bucket", {
       DeletionPolicy: "Retain",

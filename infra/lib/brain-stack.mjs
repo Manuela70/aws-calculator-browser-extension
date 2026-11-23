@@ -163,7 +163,11 @@ export class BrainStack extends Stack {
         ),
       );
     }
+    // Sin s3:ListBucket, S3 responde 403 (no 404) a un objeto que no existe, y el
+    // puntero `active` ausente del primer despliegue parecería un error de acceso.
+    const listInventory = allow("ListInventoryBucket", ["s3:ListBucket"], [bucket.bucketArn]);
     apiRole.addToPolicy(allow("ReadInventory", ["s3:GetObject"], inventoryObjects));
+    apiRole.addToPolicy(listInventory);
     apiRole.addToPolicy(
       allow("UsageCounters", ["dynamodb:GetItem", "dynamodb:UpdateItem"], [usageTable.tableArn]),
     );
@@ -218,6 +222,7 @@ export class BrainStack extends Stack {
     jobRole.addToPolicy(
       allow("PublishInventory", ["s3:GetObject", "s3:PutObject"], inventoryObjects),
     );
+    jobRole.addToPolicy(listInventory);
     jobRole.addToPolicy(
       allow("JobLogs", ["logs:CreateLogStream", "logs:PutLogEvents"], [jobLogs.logGroupArn]),
     );

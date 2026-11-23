@@ -203,18 +203,7 @@ jobs:
       - name: cdk deploy (la aprobación ya ocurrió en el entorno production)
         working-directory: infra
         run: npx cdk deploy BrainStack --no-notices --require-approval never $CDK_CONTEXT -c imageTag="$IMAGE_TAG"
-
-  smoke:
-    needs: deploy
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Credenciales temporales (github-brain-deploy)
-        run: bash infra/scripts/gha-assume-role.sh "${{ vars.BRAIN_DEPLOY_ROLE_ARN }}" "${{ vars.AWS_REGION }}"
+      # Smoke en el mismo job: una sola aprobación del entorno production por despliegue.
       - name: Verificar /health por la Function URL (corre el job si aún no hay inventario)
         run: |
           url=$(aws lambda get-function-url-config --function-name brain-api --query FunctionUrl --output text)
@@ -223,7 +212,8 @@ jobs:
           echo "/health: $status"
           if [ "$status" = "503" ]; then
             echo "Sin inventario todavía (primer despliegue): se corre brain-inventory-job una vez."
-            aws lambda invoke --function-name brain-inventory-job --cli-read-timeout 900               --payload '{}' --cli-binary-format raw-in-base64-out job.json >/dev/null
+            aws lambda invoke --function-name brain-inventory-job --cli-read-timeout 900 \
+              --payload '{}' --cli-binary-format raw-in-base64-out job.json >/dev/null
             cat job.json
           fi
           for attempt in 1 2 3 4 5; do
