@@ -21,7 +21,10 @@ function rejection(message, reason) {
 export function createDispatcher({ extensionId, session, registry, callBrain, logger = console }) {
   async function handleCall(message, sender) {
     const registration = registry.register(message.callId, ownerKeyOf(sender));
-    if (!registration.ok) return rejection(message, "duplicate_or_invalid_call");
+    if (!registration.ok) {
+      logger.warn("[aws-calc] dispatch", "Llamada rechazada:", "duplicate_or_invalid_call");
+      return rejection(message, "duplicate_or_invalid_call");
+    }
     const { signal } = registration.controller;
     let result;
     try {
@@ -47,7 +50,10 @@ export function createDispatcher({ extensionId, session, registry, callBrain, lo
   async function handle(message, sender) {
     const decision = authorize(sender, message, { extensionId });
     if (decision.ignore) return null;
-    if (!decision.ok) return rejection(message, decision.reason);
+    if (!decision.ok) {
+      logger.warn("[aws-calc] dispatch", "Mensaje rechazado:", message.type, decision.reason);
+      return rejection(message, decision.reason);
+    }
     switch (message.type) {
       case BRAIN_MESSAGE_TYPES.CALL:
         return handleCall(message, sender);

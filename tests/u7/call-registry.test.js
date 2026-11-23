@@ -13,6 +13,15 @@ describe("sw/call-registry", () => {
     expect(ownerKeyOf(contentScriptSender({ frameId: undefined }))).toBe("tab:7:0");
     expect(ownerKeyOf(panelSender())).toBe("doc:doc-panel-1");
     expect(ownerKeyOf({ id: "x" })).toBeNull();
+    // Panel lateral real: sin documentId ni pestaña, solo la URL de la extensión.
+    expect(
+      ownerKeyOf({
+        id: "x",
+        url: "chrome-extension://abc/sidepanel.html#top",
+        origin: "chrome-extension://abc",
+      }),
+    ).toBe("page:chrome-extension://abc/sidepanel.html");
+    expect(ownerKeyOf({ id: "x", url: "https://example.org/" })).toBeNull();
     expect(ownerKeyOf(null)).toBeNull();
   });
 

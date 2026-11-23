@@ -14,6 +14,11 @@ export function ownerKeyOf(sender) {
   if (typeof sender.documentId === "string" && sender.documentId.length > 0) {
     return `doc:${sender.documentId}`;
   }
+  // El panel lateral no trae documentId ni pestaña: su dueño es la página de la
+  // extensión que envió el mensaje (los callId son UUID, no se adivinan).
+  if (typeof sender.url === "string" && sender.url.startsWith("chrome-extension://")) {
+    return `page:${sender.url.split("#")[0]}`;
+  }
   return null;
 }
 
