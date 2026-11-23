@@ -104,10 +104,20 @@ jobs:
           REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
         run: |
           aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
-          docker build --platform linux/arm64 -t "$REGISTRY/brain-api:$IMAGE_TAG" brain/
+          # Manifiesto de imagen simple (sin índice OCI de atestaciones): ECR lo escanea y
+          # Lambda lo acepta.
+          docker build --platform linux/arm64 --provenance=false --sbom=false \
+            -t "$REGISTRY/brain-api:$IMAGE_TAG" brain/
           docker push "$REGISTRY/brain-api:$IMAGE_TAG"
       - name: Esperar el escaneo de ECR y bloquear hallazgos críticos o altos
         run: |
+          # El escaneo al subir tarda unos segundos en registrarse; antes de eso el
+          # waiter falla con ScanNotFoundException.
+          for attempt in $(seq 1 30); do
+            if aws ecr describe-image-scan-findings --repository-name brain-api \
+              --image-id imageTag="$IMAGE_TAG" >/dev/null 2>&1; then break; fi
+            sleep 10
+          done
           aws ecr wait image-scan-complete --repository-name brain-api --image-id imageTag="$IMAGE_TAG"
           counts=$(aws ecr describe-image-scan-findings --repository-name brain-api \
             --image-id imageTag="$IMAGE_TAG" --query 'imageScanFindings.findingSeverityCounts' --output json)
