@@ -9,14 +9,7 @@ import { createUsageGuard } from "../../brain/core/usage-guard.js";
 import { createBrainApp } from "../../brain/server/app.js";
 import { readEnvConfig, slotsPerInstance } from "../../brain/server/config.js";
 import { loadFixture, memoryLogger, readFixtureText, sha256 } from "./helpers.js";
-import {
-  EXTENSION_CLIENT,
-  ISSUER,
-  PROBE_CLIENT,
-  createKey,
-  fakeJwks,
-  signToken,
-} from "./token-helpers.js";
+import { EXTENSION_CLIENT, ISSUER, createKey, fakeJwks, signToken } from "./token-helpers.js";
 
 const ORIGIN = "chrome-extension://abcdefghijklmnop";
 const KEY = createKey("server-key");
@@ -94,8 +87,7 @@ async function startServer({
   const auth = createAuthFilter({
     jwks: fakeJwks([KEY]),
     issuer: ISSUER,
-    allowedClientIds: [EXTENSION_CLIENT, PROBE_CLIENT],
-    probeClientId: PROBE_CLIENT,
+    allowedClientIds: [EXTENSION_CLIENT],
     clock,
   });
   await auth.init();
@@ -104,10 +96,8 @@ async function startServer({
     clock,
     limits: {
       perMinute,
-      probePerMinute: 2,
       dailyTokenCap: 100_000,
       globalDailyTokenCap: 1_000_000,
-      probeDailyTokenCap: 10_000,
       maxInstances: 2,
     },
   });
@@ -374,21 +364,19 @@ describe("servidor HTTP del cerebro (integración)", () => {
     });
     expect(res.status).toBe(503);
     expect(res.body.code).toBe("model_unavailable");
-    expect(JSON.parse(logger.lines[0])).toMatchObject({ attempts: 2, Errors5xx: 1, Errors: 1 });
+    expect(JSON.parse(logger.lines[0])).toMatchObject({ attempts: 2, Errors5xx: 1 });
   });
 });
 
 describe("configuración del servidor", () => {
   const env = {
     ALLOWED_ORIGINS: `${ORIGIN}, `,
-    ALLOWED_CLIENT_IDS: `${EXTENSION_CLIENT},${PROBE_CLIENT}`,
-    PROBE_CLIENT_ID: PROBE_CLIENT,
+    ALLOWED_CLIENT_IDS: EXTENSION_CLIENT,
     COGNITO_ISSUER: ISSUER,
     INVENTORY_BUCKET: "brain-inventory-111111111111",
     USAGE_TABLE: "brain-usage",
     DAILY_TOKEN_CAP: "1000",
     GLOBAL_DAILY_TOKEN_CAP: "10000",
-    PROBE_DAILY_TOKEN_CAP: "500",
     SE_HASH_SALT: "sal",
   };
 
@@ -402,5 +390,14 @@ describe("configuración del servidor", () => {
     expect(() => readEnvConfig({ ...env, USAGE_TABLE: "" })).toThrow("USAGE_TABLE");
     expect(() => readEnvConfig({ ...env, DAILY_TOKEN_CAP: "-1" })).toThrow("DAILY_TOKEN_CAP");
     expect(() => readEnvConfig({ ...env, ALLOWED_ORIGINS: "*" })).toThrow("*");
+  });
+
+  it("acepta un rol de otra cuenta para Bedrock y rechaza un valor que no es ARN de rol", () => {
+    expect(readEnvConfig(env).bedrockRoleArn).toBeUndefined();
+    const arn = "arn:aws:iam::222222222222:role/brain-bedrock-invoke";
+    expect(readEnvConfig({ ...env, BEDROCK_ROLE_ARN: arn }).bedrockRoleArn).toBe(arn);
+    expect(() => readEnvConfig({ ...env, BEDROCK_ROLE_ARN: "brain-bedrock-invoke" })).toThrow(
+      "BEDROCK_ROLE_ARN",
+    );
   });
 });

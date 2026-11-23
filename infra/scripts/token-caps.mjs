@@ -1,10 +1,10 @@
 // infra/scripts/token-caps.mjs — Topes de tokens derivados del presupuesto y
 // compuerta de costo de `cdk synth` (infrastructure-specification.md §4).
-//   FIXED_MONTHLY          = suma de los componentes fijos (todo salvo Bedrock de los SE)
+//   FIXED_MONTHLY          = suma de los componentes de infraestructura (todo salvo
+//                            Bedrock); con Lambda varían con el uso, se estiman
 //   TOKEN_BUDGET_MONTHLY   = presupuesto × 0,8 − FIXED_MONTHLY
 //   GLOBAL_DAILY_TOKEN_CAP = floor(TOKEN_BUDGET_MONTHLY / 30 / precio mezclado por token)
 //   DAILY_TOKEN_CAP        = floor(GLOBAL_DAILY_TOKEN_CAP / cantidad de SE)
-//   PROBE_DAILY_TOKEN_CAP  = ceil(1440 × tokens medios por operación de sonda × 1,2)
 // La compuerta falla si cost-inputs.json está incompleto, si FIXED_MONTHLY ≥ la
 // mitad del presupuesto (USD 25 con USD 50) o si TOKEN_BUDGET_MONTHLY ≤ 0.
 // Los precios los completa el mantenedor desde la AWS Pricing Calculator; este
@@ -13,25 +13,9 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-export const FIXED_COMPONENTS = [
-  "alb",
-  "fargate",
-  "inventoryJob",
-  "publicIpv4",
-  "waf",
-  "probeLambda",
-  "probeBedrock",
-  "dynamodb",
-  "s3",
-  "cloudwatch",
-  "route53",
-  "secretsManager",
-  "ecr",
-];
+export const FIXED_COMPONENTS = ["lambda", "inventoryJob", "dynamodb", "s3", "cloudwatch", "ecr"];
 
 const BUDGET_MARGIN = 0.8;
-const PROBE_OPERATIONS_PER_DAY = 1440;
-const PROBE_SAFETY_FACTOR = 1.2;
 
 export class CostGateError extends Error {
   constructor(message) {
@@ -61,7 +45,6 @@ export function missingInputs(inputs) {
     "inputPricePerMillionTokensUsd",
     "outputPricePerMillionTokensUsd",
     "inputToOutputRatio",
-    "probeAvgTokensPerOperation",
     "seCount",
   ]) {
     if (!isPositiveNumber(inputs[name])) missing.push(name);
@@ -98,9 +81,6 @@ export function computeTokenCaps(inputs) {
     1_000_000;
   const globalDailyTokenCap = Math.floor(tokenBudgetMonthly / 30 / blendedPricePerToken);
   const dailyTokenCap = Math.floor(globalDailyTokenCap / inputs.seCount);
-  const probeDailyTokenCap = Math.ceil(
-    PROBE_OPERATIONS_PER_DAY * inputs.probeAvgTokensPerOperation * PROBE_SAFETY_FACTOR,
-  );
   if (dailyTokenCap <= 0) {
     throw new CostGateError("El tope diario por SE resulta en 0 tokens con estos precios.");
   }
@@ -109,7 +89,6 @@ export function computeTokenCaps(inputs) {
     tokenBudgetMonthly,
     globalDailyTokenCap,
     dailyTokenCap,
-    probeDailyTokenCap,
   };
 }
 

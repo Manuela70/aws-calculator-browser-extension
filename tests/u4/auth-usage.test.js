@@ -11,7 +11,7 @@ import { manualClock } from "./helpers.js";
 import {
   EXTENSION_CLIENT,
   ISSUER,
-  PROBE_CLIENT,
+  OTHER_CLIENT,
   createKey,
   fakeJwks,
   signToken,
@@ -27,8 +27,7 @@ function authFilter({ jwks = fakeJwks([KEY_A]), clock = manualClock(), onRefresh
     filter: createAuthFilter({
       jwks,
       issuer: ISSUER,
-      allowedClientIds: [EXTENSION_CLIENT, PROBE_CLIENT],
-      probeClientId: PROBE_CLIENT,
+      allowedClientIds: [EXTENSION_CLIENT],
       clock,
       onRefreshFailed,
     }),
@@ -38,18 +37,19 @@ function authFilter({ jwks = fakeJwks([KEY_A]), clock = manualClock(), onRefresh
 const bearer = (token) => `Bearer ${token}`;
 
 describe("AuthFilter (NFR5.2, NFR5.4)", () => {
-  it("acepta un token de acceso válido de la extensión y reconoce a la sonda", async () => {
+  it("acepta un token de acceso válido de la extensión; rechaza otro cliente y tokens sin sub", async () => {
     const { filter, clock } = authFilter();
     await filter.init();
     const ok = await filter.authenticate(bearer(signToken(KEY_A, {}, clock.now())));
-    expect(ok).toEqual({
-      ok: true,
-      principal: { sub: "se-0001", clientId: EXTENSION_CLIENT, isProbe: false },
-    });
-    const probe = await filter.authenticate(
-      bearer(signToken(KEY_A, { client_id: PROBE_CLIENT, sub: undefined }, clock.now())),
+    expect(ok).toEqual({ ok: true, principal: { sub: "se-0001", clientId: EXTENSION_CLIENT } });
+    const other = await filter.authenticate(
+      bearer(signToken(KEY_A, { client_id: OTHER_CLIENT }, clock.now())),
     );
-    expect(probe.principal).toEqual({ sub: PROBE_CLIENT, clientId: PROBE_CLIENT, isProbe: true });
+    expect(other).toEqual({ ok: false });
+    const machine = await filter.authenticate(
+      bearer(signToken(KEY_A, { sub: undefined }, clock.now())),
+    );
+    expect(machine).toEqual({ ok: false });
   });
 
   it("rechaza un token vencido más allá de la tolerancia de 60 s y acepta dentro de ella", async () => {
@@ -138,14 +138,11 @@ function memoryStore() {
 
 const LIMITS = {
   perMinute: 3,
-  probePerMinute: 2,
   dailyTokenCap: 1000,
   globalDailyTokenCap: 5000,
-  probeDailyTokenCap: 300,
   maxInstances: 2,
 };
-const SE = { sub: "se-1", isProbe: false };
-const PROBE = { sub: PROBE_CLIENT, isProbe: true };
+const SE = { sub: "se-1" };
 
 function guard(store = memoryStore(), clock = manualClock(Date.parse("2026-11-22T15:00:00.000Z"))) {
   const emitMetric = vi.fn();
@@ -169,31 +166,18 @@ describe("UsageGuard (NFR3.1, NFR3.2, NFR3.4)", () => {
     clock.advance(15_000);
     for (let i = 0; i < 3; i++) expect((await g.check(SE)).ok).toBe(true);
     expect(await g.check(SE)).toEqual({ ok: false, code: "rate_limited", retryAfterSeconds: 45 });
-    expect((await g.check({ sub: "se-2", isProbe: false })).ok).toBe(true);
+    expect((await g.check({ sub: "se-2" })).ok).toBe(true);
   });
 
   it("aplica la cuota diaria por SE y el tope global", async () => {
     const { guard: g } = guard();
     await g.record(SE, 1000);
     expect(await g.check(SE)).toEqual({ ok: false, code: "daily_quota_exceeded" });
-    const other = { sub: "se-9", isProbe: false };
-    for (let i = 0; i < 4; i++) await g.record({ sub: `se-x${i}`, isProbe: false }, 999);
+    const other = { sub: "se-9" };
+    for (let i = 0; i < 4; i++) await g.record({ sub: `se-x${i}` }, 999);
     expect((await g.check(other)).ok).toBe(true);
-    await g.record({ sub: "se-y", isProbe: false }, 10);
+    await g.record({ sub: "se-y" }, 10);
     expect(await g.check(other)).toEqual({ ok: false, code: "daily_quota_exceeded" });
-  });
-
-  it("cuenta la sonda aparte, con su propio tope por minuto y por día", async () => {
-    const { guard: g, store } = guard();
-    await g.record(PROBE, 120);
-    expect([...store.counters.keys()].some((k) => k.startsWith("global#"))).toBe(false);
-    expect((await g.check(PROBE)).ok).toBe(true);
-    expect((await g.check(PROBE)).ok).toBe(true);
-    expect((await g.check(PROBE)).code).toBe("rate_limited");
-    await g.record(PROBE, 200);
-    const { guard: fresh, store: freshStore } = guard();
-    freshStore.counters.set(`probe#day#${dayBucket(Date.parse("2026-11-22T15:00:00.000Z"))}`, 300);
-    expect((await fresh.check(PROBE)).code).toBe("daily_quota_exceeded");
   });
 
   it("con el almacén caído usa el limitador local y emite UsageGuardFallback", async () => {
@@ -202,10 +186,8 @@ describe("UsageGuard (NFR3.1, NFR3.2, NFR3.4)", () => {
     for (let i = 0; i < 3; i++) expect((await g.check(SE)).ok).toBe(true);
     expect((await g.check(SE)).code).toBe("rate_limited");
     expect(emitMetric).toHaveBeenCalledWith("UsageGuardFallback", 1);
-    await g.record({ sub: "se-z", isProbe: false }, 2500); // tope global / 2 instancias
-    expect((await g.check({ sub: "se-new", isProbe: false })).code).toBe("daily_quota_exceeded");
-    await g.record(PROBE, 150);
-    expect((await g.check(PROBE)).code).toBe("daily_quota_exceeded");
+    await g.record({ sub: "se-z" }, 2500); // tope global / 2 instancias
+    expect((await g.check({ sub: "se-new" })).code).toBe("daily_quota_exceeded");
     await g.record(SE, 0);
   });
 

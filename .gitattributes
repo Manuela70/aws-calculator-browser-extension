@@ -1,0 +1,8 @@
+# Fin de línea LF en el repositorio y en las copias de trabajo, también en Windows.
+# Prettier exige LF (`endOfLine: "lf"` por defecto); sin esto, `core.autocrlf=true`
+# deja los archivos en CRLF al hacer checkout y `npm run format:check` falla
+# aunque el contenido esté bien formateado.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.zip binary

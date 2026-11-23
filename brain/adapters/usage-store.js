@@ -1,6 +1,6 @@
 // brain/adapters/usage-store.js — Contadores de uso en DynamoDB (NFR3.1, NFR3.2,
-// NFR3.4). Claves: se#<sub>#min#<minuto>, se#<sub>#day#<día>, global#day#<día>,
-// probe#day#<día>, probe#min#<minuto>; atributo `ttl` (48 horas). Cada consulta
+// NFR3.4). Claves: se#<sub>#min#<minuto>, se#<sub>#day#<día>, global#day#<día>;
+// atributo `ttl` (48 horas). Cada consulta
 // tiene un tope de 50 ms: si no responde, se aborta y se lanza
 // StoreUnavailableError para que UsageGuard pase al limitador local.
 

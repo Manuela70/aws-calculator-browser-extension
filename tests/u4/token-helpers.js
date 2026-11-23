@@ -5,7 +5,7 @@ import { generateKeyPairSync, sign } from "node:crypto";
 
 export const ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_TEST";
 export const EXTENSION_CLIENT = "extension-client";
-export const PROBE_CLIENT = "probe-client";
+export const OTHER_CLIENT = "other-client";
 
 export function createKey(kid) {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });

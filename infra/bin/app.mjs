@@ -29,10 +29,9 @@ const context = (name) => app.node.tryGetContext(name);
 try {
   const fileParams = readParamsFile(resolve(INFRA_DIR, context("params") ?? "deploy-params.json"));
   const overrides = Object.fromEntries(
-    PARAM_NAMES.filter((name) => context(name) !== undefined).map((name) => [
-      name,
-      String(context(name)),
-    ]),
+    [...PARAM_NAMES, "bedrockRoleArn"]
+      .filter((name) => context(name) !== undefined)
+      .map((name) => [name, String(context(name))]),
   );
   buildBrainApp({
     app,

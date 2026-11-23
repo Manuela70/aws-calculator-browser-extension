@@ -105,19 +105,21 @@ describe("toLogRecord (BR6.1, NFR5.5)", () => {
     });
   });
 
-  it("emite métricas EMF de petición y de error por código", () => {
+  it("emite solo las métricas EMF necesarias, sin dimensiones", () => {
     const ok = withRequestMetrics(
       toLogRecord({ operation: "interpret", code: "ok", status: 200 }),
       1,
     );
     expect(ok._aws.CloudWatchMetrics).toHaveLength(1);
+    expect(ok._aws.CloudWatchMetrics[0].Dimensions).toEqual([[]]);
     expect(ok).toMatchObject({ Requests: 1, Errors5xx: 0, Errors429: 0 });
     const err = withRequestMetrics(
       toLogRecord({ operation: "interpret", code: "timeout", status: 504 }),
       1,
     );
-    expect(err).toMatchObject({ Errors: 1, Errors5xx: 1 });
-    expect(err._aws.CloudWatchMetrics[1].Dimensions).toEqual([["operation", "code"]]);
+    expect(err).toMatchObject({ Errors5xx: 1, code: "timeout", operation: "interpret" });
+    expect(err._aws.CloudWatchMetrics).toHaveLength(1);
+    expect(err.Errors).toBeUndefined();
     const limited = withRequestMetrics(toLogRecord({ code: "rate_limited", status: 429 }), 1);
     expect(limited.Errors429).toBe(1);
     expect(operationalMetric("UsageGuardFallback", 1, 5)).toMatchObject({

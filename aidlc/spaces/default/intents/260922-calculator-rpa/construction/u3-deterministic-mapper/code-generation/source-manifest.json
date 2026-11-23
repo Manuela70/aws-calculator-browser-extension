@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "unit": "u3-deterministic-mapper",
+  "version": 1,
+  "writes": [
+    { "path": "aws-calculator-extension/lib/dom/aria-label.js" },
+    { "path": "aws-calculator-extension/lib/dom/dom-utils.js" },
+    { "path": "aws-calculator-extension/lib/mapping/option-match.js" },
+    { "path": "aws-calculator-extension/lib/mapping/deterministic-mapper.js" },
+    { "path": "aws-calculator-extension/lib/mapping/residue-resolver.js" },
+    { "path": "aws-calculator-extension/lib/rpa/orchestrator.js" },
+    { "path": "tests/u3/fixtures.js" },
+    { "path": "tests/u3/option-match.test.js" },
+    { "path": "tests/u3/deterministic-mapper.test.js" },
+    { "path": "tests/u3/residue-resolver.test.js" },
+    { "path": "tests/u3/mapping-cycle.integration.test.js" },
+    { "path": "tests/u3/imports.test.js" },
+    { "path": "tests/u3/aria-label.test.js" },
+    { "path": "tests/u1/orchestrator.test.js" },
+    { "path": "tests/u1/option-match.test.js" },
+    { "path": "tests/u1/deterministic-mapper.test.js" },
+    { "path": "vitest.config.js" },
+    { "path": "eslint.config.js" },
+    { "path": "package.json" }
+  ]
+}

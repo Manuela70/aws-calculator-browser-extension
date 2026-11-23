@@ -1,0 +1,33 @@
+{
+  "_nota": "Precios on-demand de us-east-1 tomados de la AWS Price List API (aws pricing get-products) el 2026-11-22. Arquitectura Lambda + Function URL. Costo de infraestructura estimado USD 8.55/mes. Supuestos en _supuestos. Validar contra un estimado de calculator.aws hecho con la propia extensión.",
+  "_fuentes": {
+    "lambda": "AWSLambda Request-ARM USD 0.20/millón; Lambda-GB-Second-ARM USD 0.0000133334/GB-s (primer tramo). Sin descontar la capa gratuita",
+    "inventoryJob": "Mismos precios de Lambda ARM",
+    "dynamodb": "AmazonDynamoDB USD 0.625/millón WRU, USD 0.125/millón RRU; 25 GB sin costo",
+    "s3": "AmazonS3 Standard USD 0.023/GB-mes",
+    "cloudwatch": "AmazonCloudWatch USD 0.30/métrica-mes, USD 0.10/alarma-métrica-mes, USD 0.50/GB de logs ingeridos, USD 0.03/GB-mes de logs, USD 3/tablero-mes",
+    "ecr": "AmazonECR TimedStorage USD 0.10/GB-mes",
+    "tokens": "AmazonBedrockFoundationModels, Claude Haiku 5.5 en us-east-1 (perfil us.): USD 0.11/millón de entrada, USD 0.55/millón de salida"
+  },
+  "_supuestos": {
+    "lambda": "2 SE × 200 operaciones/día × 22 días = 8 800 invocaciones/mes de 6 s con 1 GB",
+    "inventoryJob": "4,35 ejecuciones/mes de 5 min con 2 GB",
+    "dynamodb": "~4 escrituras y ~3 lecturas por operación",
+    "s3": "inventario y versiones por debajo de 2 GB",
+    "cloudwatch": "10 métricas propias, 13 métricas en alarmas, 0,5 GB de logs, 1 tablero",
+    "ecr": "1 GB de imágenes"
+  },
+  "monthlyBudgetUsd": 20,
+  "fixedMonthlyUsd": {
+    "lambda": 0.71,
+    "inventoryJob": 0.03,
+    "dynamodb": 0.1,
+    "s3": 0.05,
+    "cloudwatch": 7.56,
+    "ecr": 0.1
+  },
+  "inputPricePerMillionTokensUsd": 0.11,
+  "outputPricePerMillionTokensUsd": 0.55,
+  "inputToOutputRatio": 4,
+  "seCount": 2
+}

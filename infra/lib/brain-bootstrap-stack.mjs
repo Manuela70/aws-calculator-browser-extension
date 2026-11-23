@@ -15,14 +15,13 @@ const GITHUB_OIDC_HOST = "token.actions.githubusercontent.com";
 const CDK_QUALIFIER = "hnb659fds";
 
 export const ECR_REPOSITORY_NAME = "brain-api";
-export const PROBE_FUNCTION_NAME = "brain-probe";
-export const CLUSTER_NAME = "brain";
-export const SERVICE_NAME = "brain-api";
+export const API_FUNCTION_NAME = "brain-api";
+export const JOB_FUNCTION_NAME = "brain-inventory-job";
 
 export class BrainBootstrapStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
-    const { githubRepo } = props;
+    const { githubRepo, bedrockRoleArn } = props;
     const account = this.account;
     const region = this.region;
 
@@ -38,6 +37,19 @@ export class BrainBootstrapStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
       lifecycleRules: [{ description: "Conserva las últimas 10 imágenes", maxImageCount: 10 }],
     });
+    // Las Lambdas del cerebro (brain-*) de esta cuenta descargan la imagen.
+    repository.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: "LambdaPullBrainFunctions",
+        principals: [new iam.ServicePrincipal("lambda.amazonaws.com")],
+        actions: ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
+        conditions: {
+          StringLike: {
+            "aws:sourceArn": `arn:${Aws.PARTITION}:lambda:${region}:${account}:function:brain-*`,
+          },
+        },
+      }),
+    );
 
     const githubPrincipal = (sub) =>
       new iam.WebIdentityPrincipal(provider.attrArn, {
@@ -80,6 +92,29 @@ export class BrainBootstrapStack extends Stack {
         resources: [repository.repositoryArn],
       }),
     );
+    // Solo lectura: el job `diff` verifica que el modelo de brain/config.json exista y
+    // esté activo antes de la aprobación (deployment-pipeline cd-config.md §3.2).
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "CheckConfiguredModel",
+        actions: ["bedrock:GetFoundationModel", "bedrock:GetInferenceProfile"],
+        resources: [
+          `arn:${Aws.PARTITION}:bedrock:${region}::foundation-model/*`,
+          `arn:${Aws.PARTITION}:bedrock:${region}:${account}:inference-profile/*`,
+        ],
+      }),
+    );
+    // Bedrock en otra cuenta: el job `diff` asume el rol de esa cuenta solo para
+    // verificar el modelo (lectura); el permiso de invocar no se usa desde el pipeline.
+    if (bedrockRoleArn) {
+      buildRole.addToPolicy(
+        new iam.PolicyStatement({
+          sid: "AssumeBedrockRoleForModelCheck",
+          actions: ["sts:AssumeRole"],
+          resources: [bedrockRoleArn],
+        }),
+      );
+    }
     buildRole.addToPolicy(
       new iam.PolicyStatement({
         sid: "CdkLookupForDiff",
@@ -106,22 +141,22 @@ export class BrainBootstrapStack extends Stack {
         ],
       }),
     );
+    const functionArn = (name) =>
+      `arn:${Aws.PARTITION}:lambda:${region}:${account}:function:${name}`;
+    // Smoke: leer la Function URL del cerebro y, si aún no hay inventario, correr el
+    // job una vez (primer despliegue).
     deployRole.addToPolicy(
       new iam.PolicyStatement({
-        sid: "SmokeInvokeProbe",
-        actions: ["lambda:InvokeFunction"],
-        resources: [
-          `arn:${Aws.PARTITION}:lambda:${region}:${account}:function:${PROBE_FUNCTION_NAME}`,
-        ],
+        sid: "SmokeReadFunctionUrl",
+        actions: ["lambda:GetFunctionUrlConfig"],
+        resources: [functionArn(API_FUNCTION_NAME)],
       }),
     );
     deployRole.addToPolicy(
       new iam.PolicyStatement({
-        sid: "SmokeDescribeService",
-        actions: ["ecs:DescribeServices"],
-        resources: [
-          `arn:${Aws.PARTITION}:ecs:${region}:${account}:service/${CLUSTER_NAME}/${SERVICE_NAME}`,
-        ],
+        sid: "SmokeRunInventoryJob",
+        actions: ["lambda:InvokeFunction"],
+        resources: [functionArn(JOB_FUNCTION_NAME)],
       }),
     );
 

@@ -1,5 +1,11 @@
 {
-  "Amazon EC2": ["maquina virtual", "maquinas virtuales", "servidor virtual", "instancia", "instancias"],
+  "Amazon EC2": [
+    "maquina virtual",
+    "maquinas virtuales",
+    "servidor virtual",
+    "instancia",
+    "instancias"
+  ],
   "S3 Standard": ["almacenamiento de objetos", "bucket"],
   "AWS Lambda": ["funcion sin servidor", "funciones sin servidor", "funcion lambda"],
   "Amazon Simple Queue Service (SQS)": ["cola de mensajes", "colas de mensajes"],

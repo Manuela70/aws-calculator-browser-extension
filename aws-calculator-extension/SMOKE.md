@@ -214,6 +214,27 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
    queda ningún nodo `[data-aidlc-overlay]`; un nuevo "Generar Estimado" sobre un
    estimado vacío funciona normalmente.
 
+### R10 — Campo que la página reformatea
+
+1. Pedir EC2 con un valor numérico que la calculadora reescribe al perder el
+   foco (por ejemplo, `"Number of instances": "1,000"` o un decimal con más
+   precisión de la que el campo acepta).
+2. Esperado: si el valor releído no es el pedido, el servicio falla con el
+   texto de `field_not_applied` y la corrida termina en ERROR **sin URL**; si la
+   calculadora conserva el valor, el servicio se guarda normalmente. Nunca DONE
+   con un valor distinto del pedido.
+
+### R11 — Servicio que se cuelga (corte de 3 minutos)
+
+1. Iniciar R1 y, ya dentro del formulario de EC2, cortar la red de la pestaña
+   (DevTools → Network → Offline) o pausar la página con el depurador para que
+   el guardado no pueda confirmarse.
+2. Esperado: a los 180 s (±1 s, medido con el registro técnico `run_start` /
+   eventos del servicio) el servicio falla con el texto de `page_timeout` o
+   `timeout:<paso>`, se sale sin guardar y la corrida termina en ERROR **sin
+   URL**; los servicios siguientes quedan como `not_attempted` si la salida no
+   se confirma.
+
 ## Registro de ejecuciones
 
 | Fecha | Versión / commit | Caso | Duración | Resultado | Notas |
@@ -234,6 +255,8 @@ Spotlight en la página (DevTools → Elements: ningún nodo `[data-aidlc-overla
 | | | R7 | | | |
 | | | R8 | | | |
 | | | R9 | | | |
+| | | R10 | | | |
+| | | R11 | | | |
 
 ## Casos del panel (U6)
 

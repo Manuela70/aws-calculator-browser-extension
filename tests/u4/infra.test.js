@@ -13,6 +13,7 @@ import {
   loadCostInputs,
   missingInputs,
 } from "../../infra/scripts/token-caps.mjs";
+import { modelResourceArns } from "../../infra/lib/brain-stack.mjs";
 
 const INFRA = new URL("../../infra/", import.meta.url);
 const exampleCosts = () =>
@@ -40,33 +41,64 @@ function policyStatements(template) {
   );
 }
 
+function functionNamed(template, name) {
+  return Object.values(template.findResources("AWS::Lambda::Function")).find(
+    (f) => f.Properties.FunctionName === name,
+  );
+}
+
+const envNames = (fn) => Object.keys(fn.Properties.Environment.Variables);
+
 describe("IaC del cerebro (cdk synth)", () => {
-  it("ECS Fargate con 2 tareas fijas, maximumPercent 100, minimumHealthyPercent 50 y rollback", () => {
-    brain.hasResourceProperties("AWS::ECS::Service", {
-      DesiredCount: 2,
-      DeploymentConfiguration: {
-        MaximumPercent: 100,
-        MinimumHealthyPercent: 50,
-        DeploymentCircuitBreaker: { Enable: true, Rollback: true },
-      },
-      HealthCheckGracePeriodSeconds: 180,
+  it("la API es una Lambda ARM64 con la imagen de ECR y una Function URL sin IAM", () => {
+    const api = functionNamed(brain, "brain-api");
+    expect(api.Properties).toMatchObject({
+      PackageType: "Image",
+      Architectures: ["arm64"],
+      MemorySize: 1024,
+      Timeout: 35,
     });
-    brain.hasResourceProperties("AWS::ECS::TaskDefinition", {
-      Family: "brain-api",
-      Cpu: "512",
-      Memory: "1024",
-      RuntimePlatform: { CpuArchitecture: "ARM64", OperatingSystemFamily: "LINUX" },
+    expect(api.Properties.Environment.Variables).toMatchObject({
+      AWS_LWA_READINESS_CHECK_PROTOCOL: "tcp",
+      ALLOWED_ORIGINS: "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
     });
-    brain.resourceCountIs("AWS::ApplicationAutoScaling::ScalableTarget", 0);
+    // AWS_REGION es una variable reservada de Lambda: no se define.
+    expect(envNames(api)).not.toContain("AWS_REGION");
+    brain.hasResourceProperties("AWS::Lambda::Url", { AuthType: "NONE", InvokeMode: "BUFFERED" });
+    brain.hasOutput("BrainUrl", {});
   });
 
-  it("no crea NAT Gateway y usa gateway endpoints de S3 y DynamoDB", () => {
-    brain.resourceCountIs("AWS::EC2::NatGateway", 0);
-    brain.resourceCountIs("AWS::EC2::VPCEndpoint", 2);
-    brain.hasResourceProperties("AWS::EC2::SecurityGroup", {
-      GroupDescription: Match.stringLikeRegexp("brain-api"),
-      SecurityGroupEgress: [Match.objectLike({ IpProtocol: "tcp", FromPort: 443, ToPort: 443 })],
+  it("no crea VPC, ALB, WAF, ECS ni direcciones públicas: costo fijo casi nulo", () => {
+    for (const type of [
+      "AWS::EC2::VPC",
+      "AWS::EC2::NatGateway",
+      "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "AWS::WAFv2::WebACL",
+      "AWS::ECS::Cluster",
+      "AWS::ECS::Service",
+      "AWS::SecretsManager::Secret",
+      "AWS::CertificateManager::Certificate",
+      "AWS::Route53::RecordSet",
+    ]) {
+      brain.resourceCountIs(type, 0);
+    }
+    brain.resourceCountIs("AWS::Lambda::Function", 2);
+  });
+
+  it("InventoryJob: Lambda semanal con la misma imagen, entregada por el adaptador a /events", () => {
+    const job = functionNamed(brain, "brain-inventory-job");
+    expect(job.Properties).toMatchObject({
+      PackageType: "Image",
+      Architectures: ["arm64"],
+      Timeout: 900,
+      ImageConfig: { Command: ["node", "jobs/job-server.mjs"] },
     });
+    expect(job.Properties.Environment.Variables.AWS_LWA_PASS_THROUGH_PATH).toBe("/events");
+    brain.hasResourceProperties("AWS::Scheduler::Schedule", {
+      ScheduleExpression: "cron(0 6 ? * MON *)",
+      Target: Match.objectLike({ RetryPolicy: { MaximumRetryAttempts: 1 } }),
+    });
+    brain.hasResourceProperties("AWS::Lambda::EventInvokeConfig", { MaximumRetryAttempts: 0 });
   });
 
   it("los roles no usan comodines salvo ecr:GetAuthorizationToken, que ECR exige", () => {
@@ -78,20 +110,12 @@ describe("IaC del cerebro (cdk synth)", () => {
         if (resources.includes("*")) expect(actions).toEqual(["ecr:GetAuthorizationToken"]);
       }
     }
-    brain.hasResourceProperties("AWS::IAM::Policy", {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Action: "bedrock:InvokeModel",
-            Resource: Match.objectLike({
-              "Fn::Join": Match.arrayWith([
-                Match.arrayWith([Match.stringLikeRegexp("foundation-model/anthropic")]),
-              ]),
-            }),
-          }),
-        ]),
-      },
-    });
+    // El modelo de brain/config.json (directo o perfil de inferencia) queda acotado
+    // a ARN concretos de Anthropic, nunca a "*".
+    const invoke = policyStatements(brain).find((st) => st.Action === "bedrock:InvokeModel");
+    const arns = JSON.stringify([].concat(invoke.Resource));
+    expect(arns).toMatch(/foundation-model\/anthropic\./);
+    expect([].concat(invoke.Resource)).not.toContain("*");
   });
 
   it("conserva el bucket del inventario y la tabla de uso (RETAIN)", () => {
@@ -110,81 +134,48 @@ describe("IaC del cerebro (cdk synth)", () => {
     });
   });
 
-  it("aplica la regla de WAF por IP de 1 000 por minuto en el ALB HTTPS", () => {
-    brain.hasResourceProperties("AWS::WAFv2::WebACL", {
-      Scope: "REGIONAL",
-      Rules: [
-        Match.objectLike({
-          Action: { Block: {} },
-          Statement: {
-            RateBasedStatement: { Limit: 1000, AggregateKeyType: "IP", EvaluationWindowSec: 60 },
-          },
-        }),
-      ],
-    });
-    brain.resourceCountIs("AWS::WAFv2::WebACLAssociation", 1);
-    brain.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", {
-      Port: 443,
-      SslPolicy: "ELBSecurityPolicy-TLS13-1-2-2021-06",
-    });
-    brain.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
-      LoadBalancerAttributes: Match.arrayWith([
-        { Key: "idle_timeout.timeout_seconds", Value: "35" },
-      ]),
-    });
-    brain.hasResourceProperties("AWS::ElasticLoadBalancingV2::TargetGroup", {
-      HealthCheckPath: "/health",
-      HealthCheckIntervalSeconds: 15,
-    });
-  });
-
-  it("crea las alarmas, la regla de EventBridge, el tablero y el presupuesto", () => {
+  it("crea solo las alarmas necesarias, el tablero y el presupuesto", () => {
     const names = Object.values(brain.findResources("AWS::CloudWatch::Alarm")).map(
       (a) => a.Properties.AlarmName,
     );
     expect(names.sort()).toEqual(
       [
+        "brain-api-failures",
         "brain-5xx-rate",
         "brain-429-rate",
         "brain-latency-p95",
-        "brain-probe-failed",
         "brain-usage-fallback",
         "brain-inventory-reload",
         "brain-inventory-job",
+        "brain-inventory-job-errors",
         "brain-inventory-age",
-        "brain-healthy-hosts",
-        "brain-no-hosts",
       ].sort(),
     );
-    brain.hasResourceProperties("AWS::Events::Rule", {
-      EventPattern: Match.objectLike({ "detail-type": ["ECS Task State Change"] }),
-    });
     brain.resourceCountIs("AWS::CloudWatch::Dashboard", 1);
     brain.hasResourceProperties("AWS::Budgets::Budget", {
       Budget: Match.objectLike({ BudgetLimit: { Amount: 50, Unit: "USD" } }),
     });
   });
 
-  it("entrega los topes de tokens como variables de entorno de la tarea", () => {
+  it("mide la disponibilidad con tráfico real: errores y throttling de la Lambda, sin sonda", () => {
+    brain.resourceCountIs("AWS::Cognito::UserPoolResourceServer", 0);
+    brain.resourceCountIs("AWS::Cognito::UserPoolClient", 1);
+    const alarm = Object.values(brain.findResources("AWS::CloudWatch::Alarm")).find(
+      (a) => a.Properties.AlarmName === "brain-api-failures",
+    );
+    const names = alarm.Properties.Metrics.filter((m) => m.MetricStat).map(
+      (m) => m.MetricStat.Metric.MetricName,
+    );
+    expect(names.sort()).toEqual(["Errors", "Throttles"]);
+    const api = functionNamed(brain, "brain-api");
+    expect(envNames(api).filter((n) => n.startsWith("PROBE_"))).toEqual([]);
+  });
+
+  it("entrega los topes de tokens como variables de entorno de la API", () => {
     const caps = computeTokenCaps(exampleCosts());
-    brain.hasResourceProperties("AWS::ECS::TaskDefinition", {
-      ContainerDefinitions: [
-        Match.objectLike({
-          Environment: Match.arrayWith([
-            { Name: "DAILY_TOKEN_CAP", Value: String(caps.dailyTokenCap) },
-            { Name: "GLOBAL_DAILY_TOKEN_CAP", Value: String(caps.globalDailyTokenCap) },
-            { Name: "PROBE_DAILY_TOKEN_CAP", Value: String(caps.probeDailyTokenCap) },
-          ]),
-        }),
-      ],
-    });
-    brain.hasResourceProperties("AWS::Scheduler::Schedule", {
-      ScheduleExpression: "rate(1 minute)",
-    });
-    brain.hasResourceProperties("AWS::Lambda::Function", {
-      FunctionName: "brain-probe",
-      Architectures: ["arm64"],
-      MemorySize: 128,
+    expect(functionNamed(brain, "brain-api").Properties.Environment.Variables).toMatchObject({
+      DAILY_TOKEN_CAP: String(caps.dailyTokenCap),
+      GLOBAL_DAILY_TOKEN_CAP: String(caps.globalDailyTokenCap),
     });
   });
 
@@ -213,15 +204,27 @@ describe("IaC del cerebro (cdk synth)", () => {
       ImageScanningConfiguration: { ScanOnPush: true },
     });
   });
+
+  it("arranque: solo las Lambdas brain-* descargan la imagen, y el smoke lee la URL y corre el job", () => {
+    const repo = Object.values(bootstrap.findResources("AWS::ECR::Repository"))[0];
+    const [statement] = repo.Properties.RepositoryPolicyText.Statement;
+    expect(statement).toMatchObject({
+      Principal: { Service: "lambda.amazonaws.com" },
+      Action: ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"],
+    });
+    expect(JSON.stringify(statement.Condition)).toMatch(/function:brain-\*/);
+    const sids = policyStatements(bootstrap).map((s) => s.Sid);
+    expect(sids).toEqual(expect.arrayContaining(["SmokeReadFunctionUrl", "SmokeRunInventoryJob"]));
+  });
 });
 
 describe("parámetros de despliegue (R3)", () => {
-  it("falla con un mensaje claro si falta el dominio o la hosted zone, o si el formato es inválido", () => {
+  it("falla con un mensaje claro si falta un parámetro o si el formato es inválido", () => {
     const params = exampleParams();
-    delete params.brainDomain;
-    delete params.hostedZoneId;
+    delete params.alarmEmail;
+    delete params.extensionId;
     expect(() => validateParams(params)).toThrow(DeployParamsError);
-    expect(() => validateParams(params)).toThrow(/brainDomain, hostedZoneId/);
+    expect(() => validateParams(params)).toThrow(/alarmEmail, extensionId/);
     expect(() => validateParams({ ...exampleParams(), extensionId: "XYZ" })).toThrow(/extensionId/);
     expect(() =>
       buildBrainApp({ account: undefined, params: exampleParams(), costInputs: exampleCosts() }),
@@ -232,30 +235,29 @@ describe("parámetros de despliegue (R3)", () => {
 describe("token-caps.mjs (compuerta de costo)", () => {
   it("calcula los topes con entradas completas", () => {
     const caps = computeTokenCaps(exampleCosts());
-    // 13 componentes de 1 USD; 50 × 0,8 − 13 = 27 USD; 1 USD por millón de tokens.
+    // 6 componentes de 1 USD; 50 × 0,8 − 6 = 34 USD; 1 USD por millón de tokens.
     expect(caps).toEqual({
-      fixedMonthly: 13,
-      tokenBudgetMonthly: 27,
-      globalDailyTokenCap: 900_000,
-      dailyTokenCap: 90_000,
-      probeDailyTokenCap: 1_728_000,
+      fixedMonthly: 6,
+      tokenBudgetMonthly: 34,
+      globalDailyTokenCap: 1_133_333,
+      dailyTokenCap: 113_333,
     });
   });
 
   it("falla si cost-inputs está incompleto o no existe, indicando qué falta", () => {
     const inputs = exampleCosts();
-    delete inputs.fixedMonthlyUsd.waf;
+    delete inputs.fixedMonthlyUsd.lambda;
     inputs.seCount = 0;
-    expect(missingInputs(inputs)).toEqual(["fixedMonthlyUsd.waf", "seCount"]);
+    expect(missingInputs(inputs)).toEqual(["fixedMonthlyUsd.lambda", "seCount"]);
     expect(() => computeTokenCaps(inputs)).toThrow(CostGateError);
-    expect(() => computeTokenCaps(inputs)).toThrow(/fixedMonthlyUsd\.waf/);
+    expect(() => computeTokenCaps(inputs)).toThrow(/fixedMonthlyUsd\.lambda/);
     expect(missingInputs(null)).toEqual(["cost-inputs"]);
     expect(() => loadCostInputs("no-existe.json")).toThrow(/cost-inputs\.example\.json/);
   });
 
   it("falla si el costo fijo alcanza la mitad del presupuesto (USD 25)", () => {
     const inputs = exampleCosts();
-    inputs.fixedMonthlyUsd.alb = 13; // 12 + 13 = 25
+    inputs.fixedMonthlyUsd.cloudwatch = 20; // 5 + 20 = 25
     expect(() => computeTokenCaps(inputs)).toThrow(/mitad del presupuesto/);
   });
 
@@ -264,5 +266,99 @@ describe("token-caps.mjs (compuerta de costo)", () => {
     inputs.inputPricePerMillionTokensUsd = 1e12;
     inputs.outputPricePerMillionTokensUsd = 1e12;
     expect(() => computeTokenCaps(inputs)).toThrow(/0 tokens/);
+  });
+
+  it("el cost-inputs.json real pasa la compuerta", () => {
+    const real = JSON.parse(readFileSync(new URL("cost-inputs.json", INFRA), "utf8"));
+    const caps = computeTokenCaps(real);
+    expect(caps.fixedMonthly).toBeLessThan(real.monthlyBudgetUsd / 2);
+    expect(caps.dailyTokenCap).toBeGreaterThan(0);
+  });
+});
+
+describe("Modelo (deployment-pipeline cd-config.md §3)", () => {
+  it("modelo directo: un solo ARN de foundation-model", () => {
+    const arns = modelResourceArns(
+      { modelId: "anthropic.claude-test-v1:0", region: "us-east-1" },
+      "aws",
+      "111111111111",
+    );
+    expect(arns).toEqual([
+      "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-test-v1:0",
+    ]);
+  });
+
+  it("perfil de inferencia: ARN del perfil y del modelo de destino, sin comodín de acción", () => {
+    const arns = modelResourceArns(
+      { modelId: "us.anthropic.claude-test-v1:0", region: "us-east-1" },
+      "aws",
+      "111111111111",
+    );
+    expect(arns).toEqual([
+      "arn:aws:bedrock:us-east-1:111111111111:inference-profile/us.anthropic.claude-test-v1:0",
+      "arn:aws:bedrock:*::foundation-model/anthropic.claude-test-v1:0",
+    ]);
+  });
+
+  it("el rol github-brain-build puede leer el modelo, solo con acciones de lectura", () => {
+    bootstrap.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: "CheckConfiguredModel",
+            Action: ["bedrock:GetFoundationModel", "bedrock:GetInferenceProfile"],
+          }),
+        ]),
+      },
+    });
+  });
+});
+
+describe("Bedrock en otra cuenta (bedrockRoleArn)", () => {
+  const ROLE = "arn:aws:iam::222222222222:role/brain-bedrock-invoke";
+  let crossBrain;
+  let crossBootstrap;
+
+  beforeAll(() => {
+    const built = buildBrainApp({
+      account: "111111111111",
+      region: "us-east-1",
+      params: { ...exampleParams(), bedrockRoleArn: ROLE },
+      costInputs: exampleCosts(),
+    });
+    crossBrain = Template.fromStack(built.brain);
+    crossBootstrap = Template.fromStack(built.bootstrap);
+  }, 120_000);
+
+  it("la API solo puede asumir el rol de la otra cuenta y ya no invoca Bedrock local", () => {
+    const statements = policyStatements(crossBrain);
+    expect(statements.some((s) => s.Action === "sts:AssumeRole" && s.Resource === ROLE)).toBe(true);
+    expect(statements.some((s) => [].concat(s.Action).includes("bedrock:InvokeModel"))).toBe(false);
+  });
+
+  it("el rol de la API conserva el nombre brain-api-task, en el que confía la otra cuenta", () => {
+    crossBrain.hasResourceProperties("AWS::IAM::Role", {
+      RoleName: "brain-api-task",
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: [Match.objectLike({ Principal: { Service: "lambda.amazonaws.com" } })],
+      }),
+    });
+  });
+
+  it("la API recibe BEDROCK_ROLE_ARN y github-brain-build puede asumir el rol para verificar el modelo", () => {
+    expect(functionNamed(crossBrain, "brain-api").Properties.Environment.Variables).toMatchObject({
+      BEDROCK_ROLE_ARN: ROLE,
+    });
+    expect(
+      policyStatements(crossBootstrap).some(
+        (s) => s.Sid === "AssumeBedrockRoleForModelCheck" && s.Resource === ROLE,
+      ),
+    ).toBe(true);
+  });
+
+  it("rechaza un bedrockRoleArn que no es un ARN de rol", () => {
+    expect(() =>
+      validateParams({ ...exampleParams(), bedrockRoleArn: "brain-bedrock-invoke" }),
+    ).toThrow(DeployParamsError);
   });
 });

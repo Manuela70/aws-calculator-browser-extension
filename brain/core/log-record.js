@@ -39,8 +39,11 @@ export function toLogRecord(entry, { salt } = {}) {
   };
 }
 
-// Agrega al registro el bloque EMF: Requests, Latency, Errors5xx, Errors429 y
-// tokens por operación y en total, y Errors por operación y código.
+// Agrega al registro el bloque EMF con solo las métricas que usan las alarmas y
+// el tablero, sin dimensiones (cada combinación de dimensiones es una métrica
+// facturada): Requests, Latency, Errors5xx, Errors429, InputTokens y
+// OutputTokens. La operación y el código de error quedan en el registro para
+// Logs Insights.
 export function withRequestMetrics(record, timestampMs) {
   const status = record.status;
   const metrics = {
@@ -54,7 +57,7 @@ export function withRequestMetrics(record, timestampMs) {
   const directives = [
     {
       Namespace: METRICS_NAMESPACE,
-      Dimensions: [["operation"], []],
+      Dimensions: [[]],
       Metrics: [
         { Name: "Requests", Unit: "Count" },
         { Name: "Latency", Unit: "Milliseconds" },
@@ -65,14 +68,6 @@ export function withRequestMetrics(record, timestampMs) {
       ],
     },
   ];
-  if (record.code !== "ok") {
-    metrics.Errors = 1;
-    directives.push({
-      Namespace: METRICS_NAMESPACE,
-      Dimensions: [["operation", "code"]],
-      Metrics: [{ Name: "Errors", Unit: "Count" }],
-    });
-  }
   return {
     _aws: { Timestamp: timestampMs, CloudWatchMetrics: directives },
     ...record,
@@ -81,7 +76,7 @@ export function withRequestMetrics(record, timestampMs) {
 }
 
 // Métrica operativa suelta (UsageGuardFallback, InventoryReloadFailed,
-// InventoryJobFailed, InventoryAgeDays, ProbeSuccess) en formato EMF.
+// InventoryJobFailed, InventoryAgeDays) en formato EMF.
 export function operationalMetric(name, value, timestampMs, unit = "Count") {
   return {
     _aws: {

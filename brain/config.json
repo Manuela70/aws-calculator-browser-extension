@@ -1,12 +1,13 @@
 {
   "model": {
-    "modelId": "anthropic.claude-3-5-haiku-20241022-v1:0",
+    "modelId": "us.anthropic.claude-haiku-5-5",
     "region": "us-east-1",
     "anthropicVersion": "bedrock-2023-05-31",
+    "effort": "low",
     "maxTokens": {
-      "interpret": 1200,
-      "map_residue": 600,
-      "waf_evaluate": 2200
+      "interpret": 4000,
+      "map_residue": 2000,
+      "waf_evaluate": 6000
     }
   },
   "timing": {
@@ -33,7 +34,6 @@
   },
   "usage": {
     "perMinute": 60,
-    "probePerMinute": 2,
     "rateLimitedRetryAfterSeconds": 5
   },
   "inventory": {

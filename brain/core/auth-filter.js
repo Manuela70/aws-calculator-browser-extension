@@ -2,7 +2,8 @@
 // (NFR5.2, NFR5.4; security-design.md §2):
 // - firma RS256 con la clave cuyo `kid` está en el JWKS del user pool;
 // - `iss` igual a la URL del user pool; `token_use = access`;
-// - `client_id` dentro de la lista permitida (extensión y sonda);
+// - `client_id` dentro de la lista permitida (cliente `extension`);
+// - `sub` presente: solo se aceptan tokens de una persona (SE), nunca de máquina;
 // - `exp` vigente con 60 s de tolerancia de reloj (no se valida `aud`: los
 //   tokens de acceso de Cognito no lo traen).
 // Caché del JWKS: refresco cada hora; un refresco fallido conserva las claves
@@ -19,7 +20,6 @@ export function createAuthFilter({
   jwks,
   issuer,
   allowedClientIds,
-  probeClientId,
   clock,
   refreshMs = 3_600_000,
   unknownKidMinIntervalMs = 300_000,
@@ -71,7 +71,7 @@ export function createAuthFilter({
 
     hasKeys: () => keys.size > 0,
 
-    // Devuelve { ok: true, principal: { sub, clientId, isProbe } } o { ok: false }.
+    // Devuelve { ok: true, principal: { sub, clientId } } o { ok: false }.
     async authenticate(authorizationHeader) {
       const match = typeof authorizationHeader === "string" && BEARER.exec(authorizationHeader);
       if (!match) return DENIED;
@@ -99,15 +99,8 @@ export function createAuthFilter({
       }
       if (payload.token_use !== "access") return DENIED;
       if (typeof payload.client_id !== "string" || !allowed.has(payload.client_id)) return DENIED;
-      const sub = typeof payload.sub === "string" ? payload.sub : payload.client_id;
-      return {
-        ok: true,
-        principal: {
-          sub,
-          clientId: payload.client_id,
-          isProbe: payload.client_id === probeClientId,
-        },
-      };
+      if (typeof payload.sub !== "string" || payload.sub === "") return DENIED;
+      return { ok: true, principal: { sub: payload.sub, clientId: payload.client_id } };
     },
   };
 }

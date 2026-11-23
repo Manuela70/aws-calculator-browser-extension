@@ -2,9 +2,7 @@
 // security-design.md §1 pasos 5-6; scalability-design.md):
 // - 60 operaciones por minuto por SE (ventana deslizante aproximada con el
 //   minuto actual y el anterior) → rate_limited con retryAfterSeconds;
-// - cuota diaria de tokens por SE y tope global diario → daily_quota_exceeded;
-// - la sonda tiene su propio tope por minuto y su contador diario (probe#day),
-//   fuera de la cuota de los SE.
+// - cuota diaria de tokens por SE y tope global diario → daily_quota_exceeded.
 // Si el almacén compartido no responde (50 ms), cae al limitador local de la
 // instancia con el mismo tope por minuto y al tope global / MAX_INSTANCES, y
 // emite la métrica UsageGuardFallback: el límite pasa a ser aproximado, nunca
@@ -37,11 +35,7 @@ export function createUsageGuard({ store, clock, limits, emitMetric = () => {} }
   const localDayTokens = new Map();
 
   function scopeOf(principal) {
-    return principal.isProbe ? "probe" : `se#${principal.sub}`;
-  }
-
-  function minuteLimitOf(principal) {
-    return principal.isProbe ? limits.probePerMinute : limits.perMinute;
+    return `se#${principal.sub}`;
   }
 
   function addLocal(map, key, amount) {
@@ -74,13 +68,9 @@ export function createUsageGuard({ store, clock, limits, emitMetric = () => {} }
     const minute = minuteBucket(nowMs);
     const current = addLocal(localMinutes, `${scope}|${minute}`, 1);
     const previous = localMinutes.get(`${scope}|${minute - 1}`) ?? 0;
-    if (slidingCount(current, previous, nowMs) > minuteLimitOf(principal)) return rejectRate(nowMs);
+    if (slidingCount(current, previous, nowMs) > limits.perMinute) return rejectRate(nowMs);
     const day = dayBucket(nowMs);
     const perInstance = Math.max(1, limits.maxInstances);
-    if (principal.isProbe) {
-      const spent = localDayTokens.get(`probe|${day}`) ?? 0;
-      return spent >= limits.probeDailyTokenCap / perInstance ? QUOTA : OK;
-    }
     const spent = localDayTokens.get(`global|${day}`) ?? 0;
     return spent >= limits.globalDailyTokenCap / perInstance ? QUOTA : OK;
   }
@@ -91,12 +81,8 @@ export function createUsageGuard({ store, clock, limits, emitMetric = () => {} }
     const ttl = Math.floor(nowMs / 1000) + TTL_SECONDS;
     const current = await store.increment(`${scope}#min#${minute}`, 1, ttl);
     const previous = await store.get(`${scope}#min#${minute - 1}`);
-    if (slidingCount(current, previous, nowMs) > minuteLimitOf(principal)) return rejectRate(nowMs);
+    if (slidingCount(current, previous, nowMs) > limits.perMinute) return rejectRate(nowMs);
     const day = dayBucket(nowMs);
-    if (principal.isProbe) {
-      const spent = await store.get(`probe#day#${day}`);
-      return spent >= limits.probeDailyTokenCap ? QUOTA : OK;
-    }
     if ((await store.get(`${scope}#day#${day}`)) >= limits.dailyTokenCap) return QUOTA;
     if ((await store.get(`global#day#${day}`)) >= limits.globalDailyTokenCap) return QUOTA;
     return OK;
@@ -121,15 +107,11 @@ export function createUsageGuard({ store, clock, limits, emitMetric = () => {} }
       const nowMs = clock.now();
       const day = dayBucket(nowMs);
       // Contador local siempre al día: sostiene el tope por instancia si el almacén cae.
-      addLocal(localDayTokens, `${principal.isProbe ? "probe" : "global"}|${day}`, amount);
+      addLocal(localDayTokens, `global|${day}`, amount);
       const ttl = Math.floor(nowMs / 1000) + TTL_SECONDS;
       try {
-        if (principal.isProbe) {
-          await store.increment(`probe#day#${day}`, amount, ttl);
-        } else {
-          await store.increment(`se#${principal.sub}#day#${day}`, amount, ttl);
-          await store.increment(`global#day#${day}`, amount, ttl);
-        }
+        await store.increment(`se#${principal.sub}#day#${day}`, amount, ttl);
+        await store.increment(`global#day#${day}`, amount, ttl);
       } catch {
         emitMetric("UsageGuardFallback", 1);
       }

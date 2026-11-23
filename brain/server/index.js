@@ -1,11 +1,13 @@
-// brain/server/index.js — Punto de entrada del contenedor `brain-api`: arma los
-// adaptadores reales de AWS (identidad IAM de la tarea, sin claves), arranca la
-// carga del inventario y del JWKS y abre el puerto. El chequeo de salud responde
-// 503 hasta que haya inventario, así el ALB no envía tráfico a una tarea vacía.
+// brain/server/index.js — Punto de entrada de `brain-api` (Lambda con AWS Lambda
+// Web Adapter): arma los adaptadores reales de AWS (identidad IAM de la función,
+// sin claves), arranca la carga del inventario y del JWKS y abre el puerto. El
+// chequeo de salud responde 503 hasta que haya inventario; cada operación lo
+// espera hasta initDeadlineMs.
 
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
+import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 import { createBedrockClient } from "../adapters/bedrock-client.js";
 import { parseInventoryInWorker } from "../adapters/inventory-parser.js";
 import { createInventoryStore } from "../adapters/inventory-store.js";
@@ -31,10 +33,19 @@ function main() {
   const { timing, concurrency, usage: usageConfig, model, inventory } = staticConfig;
   const region = env.region ?? model.region;
 
+  // Bedrock en otra cuenta: credenciales temporales del rol de esa cuenta, renovadas
+  // por el SDK; nunca una clave estática (NFR5.1).
+  const bedrockCredentials = env.bedrockRoleArn
+    ? fromTemporaryCredentials({
+        params: { RoleArn: env.bedrockRoleArn, RoleSessionName: "brain-api" },
+        clientConfig: { region: model.region },
+      })
+    : undefined;
   const bedrock = createBedrockClient({
-    runtime: new BedrockRuntimeClient({ region: model.region }),
+    runtime: new BedrockRuntimeClient({ region: model.region, credentials: bedrockCredentials }),
     modelId: model.modelId,
     anthropicVersion: model.anthropicVersion,
+    effort: model.effort,
   });
   const inventoryStore = createInventoryStore({
     s3: new S3Client({ region }),
@@ -50,7 +61,6 @@ function main() {
     jwks: createJwksClient({ issuer: env.issuer }),
     issuer: env.issuer,
     allowedClientIds: env.allowedClientIds,
-    probeClientId: env.probeClientId,
     clock,
     refreshMs: timing.jwksRefreshMs,
     unknownKidMinIntervalMs: timing.jwksUnknownKidMinIntervalMs,
@@ -62,10 +72,8 @@ function main() {
     emitMetric,
     limits: {
       perMinute: usageConfig.perMinute,
-      probePerMinute: usageConfig.probePerMinute,
       dailyTokenCap: env.dailyTokenCap,
       globalDailyTokenCap: env.globalDailyTokenCap,
-      probeDailyTokenCap: env.probeDailyTokenCap,
       maxInstances: concurrency.maxInstances,
     },
   });
@@ -118,7 +126,7 @@ function main() {
       maxBodyBytes: MAX_BODY_BYTES,
     },
   });
-  // El ALB cierra conexiones inactivas a los 35 s; el servidor las mantiene un poco más.
+  // El adaptador reutiliza la conexión local entre invocaciones.
   server.keepAliveTimeout = 40_000;
   server.headersTimeout = 41_000;
 

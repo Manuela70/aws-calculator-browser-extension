@@ -1,7 +1,6 @@
 // infra/lib/build-app.mjs — Ensambla la app de CDK: valida los parámetros de
-// despliegue (riesgo R3: sin dominio ni hosted zone, `cdk synth` falla con un
-// mensaje claro), aplica la compuerta de costo (token-caps.mjs) y crea los dos
-// stacks. Lo usan bin/app.mjs y las pruebas de síntesis.
+// despliegue (riesgo R3: si falta uno, `cdk synth` falla con un mensaje
+// claro), aplica la compuerta de costo (token-caps.mjs) y crea los dos stacks. Lo usan bin/app.mjs y las pruebas de síntesis.
 
 import { readFileSync } from "node:fs";
 import { App } from "aws-cdk-lib";
@@ -12,9 +11,6 @@ import { BrainStack } from "./brain-stack.mjs";
 export { Match, Template } from "aws-cdk-lib/assertions";
 
 export const PARAM_NAMES = [
-  "brainDomain",
-  "hostedZoneId",
-  "hostedZoneName",
   "alarmEmail",
   "extensionId",
   "cognitoDomainPrefix",
@@ -29,6 +25,8 @@ const PARAM_PATTERNS = {
   cognitoDomainPrefix: /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   imageTag: /^[\w.-]{1,128}$/,
 };
+
+const BEDROCK_ROLE_ARN = /^arn:aws[\w-]*:iam::\d{12}:role\/[\w+=,.@/-]{1,128}$/;
 
 export class DeployParamsError extends Error {
   constructor(message) {
@@ -54,6 +52,11 @@ export function validateParams(params) {
     throw new DeployParamsError(
       `Parámetros de despliegue con formato inválido: ${invalid.join(", ")}.`,
     );
+  }
+  // Opcional: rol de la cuenta que tiene Bedrock (cd-config.md §3.2). Sin él, el
+  // modelo se invoca en esta misma cuenta.
+  if (params.bedrockRoleArn !== undefined && !BEDROCK_ROLE_ARN.test(params.bedrockRoleArn)) {
+    throw new DeployParamsError("Parámetro de despliegue con formato inválido: bedrockRoleArn.");
   }
   return params;
 }
@@ -85,6 +88,7 @@ export function buildBrainApp({
     env,
     stackName: "brain-bootstrap",
     githubRepo: params.githubRepo,
+    bedrockRoleArn: params.bedrockRoleArn,
   });
   const brain = new BrainStack(app, "BrainStack", {
     env,

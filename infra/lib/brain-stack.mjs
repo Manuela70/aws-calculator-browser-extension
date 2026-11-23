@@ -1,55 +1,47 @@
 // infra/lib/brain-stack.mjs — Stack principal `brain` (infrastructure-specification.md,
-// monitoring-design.md). Un solo entorno (prod) en us-east-1 (Q2):
-// - VPC con 2 subredes públicas, sin NAT Gateway, con gateway endpoints de S3 y
-//   DynamoDB; security groups con salida solo TCP 443 (riesgo R4);
-// - ALB HTTPS (TLS 1.2+) con ACM, idle 35 s, /health; WAF con regla por IP de
-//   1 000 peticiones por minuto;
-// - ECS Fargate ARM64 con 2 tareas fijas (minimumHealthyPercent 50,
-//   maximumPercent 100, circuit breaker con rollback): nunca más de 2 tareas,
-//   así el tope global de 15 invocaciones (2 × 7) se mantiene (NFR3.4);
-// - Cognito (cliente `extension` con PKCE y cliente de máquina `probe`), S3 del
-//   inventario y DynamoDB de uso con RETAIN, secreto de la sonda;
-// - EventBridge Scheduler para InventoryJob (semanal) y Probe (cada minuto);
-// - roles de IAM de mínimo privilegio, sin comodines (NFR4.1);
-// - alarmas, regla de EventBridge, tablero, SNS y AWS Budgets.
+// monitoring-design.md), rediseñado a Lambda en Deployment Execution por costo
+// (decisión del mantenedor: 2 SE y proyecto open source; el costo fijo de ECS + ALB
+// era ~USD 57/mes). Un solo entorno (prod) en us-east-1:
+// - API: Lambda ARM64 con la imagen del cerebro de ECR y AWS Lambda Web Adapter,
+//   expuesta con una Function URL sin autenticación de IAM. La autenticación
+//   (token de Cognito), el CORS y los límites por SE los aplica el propio cerebro
+//   (AuthFilter y UsageGuard con DynamoDB). Sin VPC, ALB, WAF ni IP públicas.
+// - Concurrencia: la de la cuenta (10 en una cuenta nueva) acota las invocaciones
+//   simultáneas a Bedrock por debajo del tope de 15 (NFR3.4); no se reserva
+//   concurrencia porque una cuenta nueva no lo permite.
+// - InventoryJob: Lambda semanal con la misma imagen (EventBridge Scheduler).
+// - Cognito (solo el cliente `extension` con PKCE), S3 del inventario y DynamoDB
+//   de uso con RETAIN.
+// - Disponibilidad con tráfico real (NFR1.4): errores 5xx del cerebro y errores o
+//   throttling de la Lambda sobre el total de invocaciones; sin sonda sintética.
+// - Roles de IAM de mínimo privilegio, sin comodines (NFR4.1); alarmas, tablero,
+//   SNS y AWS Budgets.
 // Todos los roles llevan el prefijo `brain-` para encajar en BrainCfnExecutionPolicy.
 
-import { fileURLToPath } from "node:url";
-import { Aws, CfnOutput, Duration, RemovalPolicy, SecretValue, Stack, Tags } from "aws-cdk-lib";
+import { Aws, CfnOutput, Duration, Fn, RemovalPolicy, Stack, Tags } from "aws-cdk-lib";
 import * as budgets from "aws-cdk-lib/aws-budgets";
-import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cw from "aws-cdk-lib/aws-cloudwatch";
 import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
-import * as ecs from "aws-cdk-lib/aws-ecs";
-import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
-import * as events from "aws-cdk-lib/aws-events";
-import * as eventTargets from "aws-cdk-lib/aws-events-targets";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
-import * as route53 from "aws-cdk-lib/aws-route53";
-import * as route53Targets from "aws-cdk-lib/aws-route53-targets";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as scheduler from "aws-cdk-lib/aws-scheduler";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
-import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import {
-  CLUSTER_NAME,
+  API_FUNCTION_NAME,
   ECR_REPOSITORY_NAME,
-  PROBE_FUNCTION_NAME,
-  SERVICE_NAME,
+  JOB_FUNCTION_NAME,
 } from "./brain-bootstrap-stack.mjs";
 
-const PROBE_ASSET_DIR = fileURLToPath(new URL("../../brain/probe", import.meta.url));
-const APP_PORT = 8080;
 const METRICS_NAMESPACE = "Brain";
-const TASK_COUNT = 2; // MAX_INSTANCES = 2 (NFR3.3); cambiarlo obliga a recalcular el semáforo
+// opDeadlineMs de brain/config.json es 25 s; la Lambda corta un poco después.
+const API_TIMEOUT = Duration.seconds(35);
+const JOB_TIMEOUT = Duration.minutes(15);
 
 function serviceRole(scope, id, roleName, servicePrincipal, description) {
   return new iam.Role(scope, id, {
@@ -63,55 +55,30 @@ function allow(sid, actions, resources) {
   return new iam.PolicyStatement({ sid, actions, resources });
 }
 
-export class BrainStack extends Stack {
-  // Zonas fijas: la síntesis no consulta la cuenta (sin lookups ni credenciales).
-  get availabilityZones() {
-    return [`${this.region}a`, `${this.region}b`];
-  }
+// Prefijos de los perfiles de inferencia entre regiones de Bedrock (p. ej. "us.").
+const INFERENCE_PROFILE_PREFIX = /^(us|eu|apac|global)\./;
 
+// ARN que el rol de la API puede invocar. Un modelo directo da un solo ARN de
+// foundation-model; un perfil de inferencia necesita el ARN del perfil y el del
+// modelo de destino en las regiones a las que el perfil enruta (deployment-pipeline
+// cd-config.md §3.2).
+export function modelResourceArns(model, partition = "aws", account = "*") {
+  const match = INFERENCE_PROFILE_PREFIX.exec(model.modelId);
+  if (!match) {
+    return [`arn:${partition}:bedrock:${model.region}::foundation-model/${model.modelId}`];
+  }
+  const baseModelId = model.modelId.slice(match[0].length);
+  return [
+    `arn:${partition}:bedrock:${model.region}:${account}:inference-profile/${model.modelId}`,
+    `arn:${partition}:bedrock:*::foundation-model/${baseModelId}`,
+  ];
+}
+
+export class BrainStack extends Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
     const { params, caps, model } = props;
-    const region = this.region;
     Tags.of(this).add("Project", "brain");
-
-    // ---------------------------------------------------------------- red
-    const vpc = new ec2.Vpc(this, "Vpc", {
-      maxAzs: 2,
-      natGateways: 0,
-      subnetConfiguration: [{ name: "public", subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 }],
-      gatewayEndpoints: {
-        S3: { service: ec2.GatewayVpcEndpointAwsService.S3 },
-        DynamoDB: { service: ec2.GatewayVpcEndpointAwsService.DYNAMODB },
-      },
-      restrictDefaultSecurityGroup: false,
-    });
-    const publicSubnets = { subnetType: ec2.SubnetType.PUBLIC };
-
-    const albSg = new ec2.SecurityGroup(this, "AlbSecurityGroup", {
-      vpc,
-      allowAllOutbound: false,
-      description: "ALB del cerebro: HTTPS publico; redireccion HTTP",
-    });
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "HTTPS");
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), "Redireccion a HTTPS");
-
-    const apiSg = new ec2.SecurityGroup(this, "ApiSecurityGroup", {
-      vpc,
-      allowAllOutbound: false,
-      description: "brain-api: entrada solo desde el ALB; salida solo TCP 443",
-    });
-    apiSg.addIngressRule(albSg, ec2.Port.tcp(APP_PORT), "Solo desde el ALB");
-    // Salida 443: Bedrock, ECR, Cognito (JWKS) y los gateway endpoints de S3/DynamoDB.
-    apiSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "HTTPS de salida");
-    albSg.addEgressRule(apiSg, ec2.Port.tcp(APP_PORT), "Hacia las tareas");
-
-    const jobSg = new ec2.SecurityGroup(this, "InventoryJobSecurityGroup", {
-      vpc,
-      allowAllOutbound: false,
-      description: "InventoryJob: sin entrada; salida solo TCP 443",
-    });
-    jobSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "HTTPS de salida");
 
     // --------------------------------------------------------- datos
     const bucket = new s3.Bucket(this, "InventoryBucket", {
@@ -144,14 +111,6 @@ export class BrainStack extends Stack {
     const cognitoDomain = userPool.addDomain("Domain", {
       cognitoDomain: { domainPrefix: params.cognitoDomainPrefix },
     });
-    const probeScope = new cognito.ResourceServerScope({
-      scopeName: "probe",
-      scopeDescription: "Sonda sintetica del SLI",
-    });
-    const resourceServer = userPool.addResourceServer("BrainResourceServer", {
-      identifier: "brain",
-      scopes: [probeScope],
-    });
     const extensionClient = userPool.addClient("ExtensionClient", {
       userPoolClientName: "extension",
       generateSecret: false,
@@ -167,35 +126,9 @@ export class BrainStack extends Stack {
       enableTokenRevocation: true,
       preventUserExistenceErrors: true,
     });
-    const probeClient = userPool.addClient("ProbeClient", {
-      userPoolClientName: "probe",
-      generateSecret: true,
-      oAuth: {
-        flows: { clientCredentials: true },
-        scopes: [cognito.OAuthScope.resourceServer(resourceServer, probeScope)],
-      },
-      accessTokenValidity: Duration.hours(1),
-    });
-    probeClient.node.addDependency(resourceServer);
-
-    const probeSecret = new secretsmanager.Secret(this, "ProbeClientSecret", {
-      secretName: "brain/probe-client",
-      description: "Credenciales del cliente de maquina de la sonda (solo las lee brain-probe)",
-      secretObjectValue: {
-        clientId: SecretValue.unsafePlainText(probeClient.userPoolClientId),
-        clientSecret: probeClient.userPoolClientSecret,
-      },
-    });
 
     // ------------------------------------------------------------ cómputo
-    const cluster = new ecs.Cluster(this, "Cluster", { vpc, clusterName: CLUSTER_NAME });
     const repository = ecr.Repository.fromRepositoryName(this, "Repository", ECR_REPOSITORY_NAME);
-    const image = ecs.ContainerImage.fromEcrRepository(repository, params.imageTag);
-    const runtimePlatform = {
-      cpuArchitecture: ecs.CpuArchitecture.ARM64,
-      operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
-    };
-
     const apiLogs = new logs.LogGroup(this, "ApiLogs", {
       logGroupName: "/brain/api",
       retention: logs.RetentionDays.ONE_MONTH,
@@ -204,188 +137,110 @@ export class BrainStack extends Stack {
       logGroupName: "/brain/inventory-job",
       retention: logs.RetentionDays.ONE_MONTH,
     });
-    const probeLogs = new logs.LogGroup(this, "ProbeLogs", {
-      logGroupName: "/brain/probe",
-      retention: logs.RetentionDays.ONE_MONTH,
-    });
 
-    const modelArn = `arn:${Aws.PARTITION}:bedrock:${model.region}::foundation-model/${model.modelId}`;
-    const apiTaskRole = serviceRole(
+    // El nombre brain-api-task se conserva: el rol de Bedrock de la otra cuenta
+    // confía en él por nombre (infra/cross-account/bedrock-invoke-role.yaml).
+    const apiRole = serviceRole(
       this,
       "ApiTaskRole",
       "brain-api-task",
-      "ecs-tasks.amazonaws.com",
-      "Tarea brain-api",
+      "lambda.amazonaws.com",
+      "Lambda brain-api",
     );
-    apiTaskRole.addToPolicy(allow("InvokeConfiguredModel", ["bedrock:InvokeModel"], [modelArn]));
-    apiTaskRole.addToPolicy(allow("ReadInventory", ["s3:GetObject"], inventoryObjects));
-    apiTaskRole.addToPolicy(
+    // Bedrock en otra cuenta: la API solo puede asumir ese rol, y el permiso de
+    // invocar el modelo vive en la otra cuenta (infra/cross-account/). Sin rol,
+    // invoca el modelo en esta cuenta.
+    if (params.bedrockRoleArn) {
+      apiRole.addToPolicy(
+        allow("AssumeBedrockInvokeRole", ["sts:AssumeRole"], [params.bedrockRoleArn]),
+      );
+    } else {
+      apiRole.addToPolicy(
+        allow(
+          "InvokeConfiguredModel",
+          ["bedrock:InvokeModel"],
+          modelResourceArns(model, Aws.PARTITION, Aws.ACCOUNT_ID),
+        ),
+      );
+    }
+    apiRole.addToPolicy(allow("ReadInventory", ["s3:GetObject"], inventoryObjects));
+    apiRole.addToPolicy(
       allow("UsageCounters", ["dynamodb:GetItem", "dynamodb:UpdateItem"], [usageTable.tableArn]),
     );
-    const apiExecutionRole = serviceRole(
-      this,
-      "ApiExecutionRole",
-      "brain-api-execution",
-      "ecs-tasks.amazonaws.com",
-      "Ejecucion de brain-api: extraer imagen y escribir registros",
+    apiRole.addToPolicy(
+      allow("ApiLogs", ["logs:CreateLogStream", "logs:PutLogEvents"], [apiLogs.logGroupArn]),
     );
 
-    const apiTaskDefinition = new ecs.FargateTaskDefinition(this, "ApiTaskDefinition", {
-      family: "brain-api",
-      cpu: 512,
-      memoryLimitMiB: 1024,
-      runtimePlatform,
-      taskRole: apiTaskRole,
-      executionRole: apiExecutionRole,
-    });
-    apiTaskDefinition.addContainer("api", {
-      image,
-      portMappings: [{ containerPort: APP_PORT }],
-      readonlyRootFilesystem: true,
-      logging: ecs.LogDrivers.awsLogs({ logGroup: apiLogs, streamPrefix: "api" }),
+    // AWS Lambda Web Adapter (en la imagen) arranca el servidor HTTP del cerebro y
+    // le pasa cada petición de la Function URL. Queda listo en cuanto el puerto
+    // escucha; el propio cerebro espera el inventario hasta initDeadlineMs.
+    const lwaEnv = {
+      PORT: "8080",
+      AWS_LWA_PORT: "8080",
+      AWS_LWA_READINESS_CHECK_PROTOCOL: "tcp",
+    };
+    const apiFunction = new lambda.DockerImageFunction(this, "ApiFunction", {
+      functionName: API_FUNCTION_NAME,
+      description: "Cerebro de la extension AWS Calculator (HTTP via Function URL)",
+      code: lambda.DockerImageCode.fromEcr(repository, { tagOrDigest: params.imageTag }),
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: 1024,
+      timeout: API_TIMEOUT,
+      role: apiRole,
+      logGroup: apiLogs,
       environment: {
-        PORT: String(APP_PORT),
-        AWS_REGION: region,
+        ...lwaEnv,
         ALLOWED_ORIGINS: `chrome-extension://${params.extensionId}`,
-        ALLOWED_CLIENT_IDS: `${extensionClient.userPoolClientId},${probeClient.userPoolClientId}`,
-        PROBE_CLIENT_ID: probeClient.userPoolClientId,
+        ALLOWED_CLIENT_IDS: extensionClient.userPoolClientId,
         COGNITO_ISSUER: userPool.userPoolProviderUrl,
         INVENTORY_BUCKET: bucket.bucketName,
         USAGE_TABLE: usageTable.tableName,
         DAILY_TOKEN_CAP: String(caps.dailyTokenCap),
         GLOBAL_DAILY_TOKEN_CAP: String(caps.globalDailyTokenCap),
-        PROBE_DAILY_TOKEN_CAP: String(caps.probeDailyTokenCap),
         SE_HASH_SALT: Aws.STACK_ID,
+        ...(params.bedrockRoleArn ? { BEDROCK_ROLE_ARN: params.bedrockRoleArn } : {}),
       },
     });
-
-    const apiService = new ecs.FargateService(this, "ApiService", {
-      cluster,
-      serviceName: SERVICE_NAME,
-      taskDefinition: apiTaskDefinition,
-      desiredCount: TASK_COUNT,
-      minHealthyPercent: 50,
-      maxHealthyPercent: 100,
-      circuitBreaker: { rollback: true },
-      assignPublicIp: true,
-      vpcSubnets: publicSubnets,
-      securityGroups: [apiSg],
-      healthCheckGracePeriod: Duration.seconds(180),
-    });
-
-    // ------------------------------------------------------------ entrada
-    const zone = route53.HostedZone.fromHostedZoneAttributes(this, "HostedZone", {
-      hostedZoneId: params.hostedZoneId,
-      zoneName: params.hostedZoneName,
-    });
-    const certificate = new acm.Certificate(this, "Certificate", {
-      domainName: params.brainDomain,
-      validation: acm.CertificateValidation.fromDns(zone),
-    });
-    const alb = new elbv2.ApplicationLoadBalancer(this, "Alb", {
-      vpc,
-      internetFacing: true,
-      securityGroup: albSg,
-      vpcSubnets: publicSubnets,
-      idleTimeout: Duration.seconds(35),
-    });
-    const httpsListener = alb.addListener("Https", {
-      port: 443,
-      open: false,
-      certificates: [certificate],
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
-    });
-    const targetGroup = httpsListener.addTargets("Api", {
-      port: APP_PORT,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [apiService],
-      deregistrationDelay: Duration.seconds(30),
-      healthCheck: {
-        path: "/health",
-        healthyHttpCodes: "200",
-        interval: Duration.seconds(15),
-        unhealthyThresholdCount: 3,
-        healthyThresholdCount: 2,
-      },
-    });
-    alb.addListener("Http", {
-      port: 80,
-      open: false,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: "HTTPS",
-        port: "443",
-        permanent: true,
-      }),
-    });
-    new route53.ARecord(this, "BrainAlias", {
-      zone,
-      recordName: params.brainDomain,
-      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(alb)),
-    });
-
-    const webAcl = new wafv2.CfnWebACL(this, "WebAcl", {
-      name: "brain-web-acl",
-      scope: "REGIONAL",
-      defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: "brain-web-acl",
-        sampledRequestsEnabled: false,
-      },
-      rules: [
-        {
-          name: "rate-per-ip",
-          priority: 0,
-          action: { block: {} },
-          statement: {
-            rateBasedStatement: { limit: 1000, aggregateKeyType: "IP", evaluationWindowSec: 60 },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "brain-rate-per-ip",
-            sampledRequestsEnabled: false,
-          },
-        },
-      ],
-    });
-    new wafv2.CfnWebACLAssociation(this, "WebAclAssociation", {
-      resourceArn: alb.loadBalancerArn,
-      webAclArn: webAcl.attrArn,
+    const apiUrl = apiFunction.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      invokeMode: lambda.InvokeMode.BUFFERED,
     });
 
     // ------------------------------------------------------ InventoryJob
-    const jobTaskRole = serviceRole(
+    const jobRole = serviceRole(
       this,
       "InventoryJobTaskRole",
       "brain-inventory-job-task",
-      "ecs-tasks.amazonaws.com",
+      "lambda.amazonaws.com",
       "InventoryJob: publica versiones y el puntero active",
     );
     // Lee la versión activa para la comparación del 10 % y publica la nueva.
-    jobTaskRole.addToPolicy(
+    jobRole.addToPolicy(
       allow("PublishInventory", ["s3:GetObject", "s3:PutObject"], inventoryObjects),
     );
-    const jobExecutionRole = serviceRole(
-      this,
-      "InventoryJobExecutionRole",
-      "brain-inventory-job-execution",
-      "ecs-tasks.amazonaws.com",
-      "Ejecucion de InventoryJob",
+    jobRole.addToPolicy(
+      allow("JobLogs", ["logs:CreateLogStream", "logs:PutLogEvents"], [jobLogs.logGroupArn]),
     );
-    const jobTaskDefinition = new ecs.FargateTaskDefinition(this, "InventoryJobTaskDefinition", {
-      family: "brain-inventory-job",
-      cpu: 512,
-      memoryLimitMiB: 1024,
-      runtimePlatform,
-      taskRole: jobTaskRole,
-      executionRole: jobExecutionRole,
-    });
-    jobTaskDefinition.addContainer("job", {
-      image,
-      command: ["node", "jobs/build-inventory.mjs", "run"],
-      readonlyRootFilesystem: true,
-      logging: ecs.LogDrivers.awsLogs({ logGroup: jobLogs, streamPrefix: "job" }),
-      environment: { AWS_REGION: region, INVENTORY_BUCKET: bucket.bucketName },
+    // Misma imagen; el adaptador entrega el evento del calendario a POST /events de
+    // jobs/job-server.mjs, que corre el job y responde 500 si falla.
+    const jobFunction = new lambda.DockerImageFunction(this, "InventoryJobFunction", {
+      functionName: JOB_FUNCTION_NAME,
+      description: "InventoryJob semanal del cerebro",
+      code: lambda.DockerImageCode.fromEcr(repository, {
+        tagOrDigest: params.imageTag,
+        cmd: ["node", "jobs/job-server.mjs"],
+      }),
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: 2048,
+      timeout: JOB_TIMEOUT,
+      retryAttempts: 0,
+      role: jobRole,
+      logGroup: jobLogs,
+      environment: {
+        ...lwaEnv,
+        AWS_LWA_PASS_THROUGH_PATH: "/events",
+        INVENTORY_BUCKET: bucket.bucketName,
+      },
     });
 
     const inventorySchedulerRole = serviceRole(
@@ -396,14 +251,7 @@ export class BrainStack extends Stack {
       "Calendario semanal de InventoryJob",
     );
     inventorySchedulerRole.addToPolicy(
-      allow("RunInventoryJob", ["ecs:RunTask"], [jobTaskDefinition.taskDefinitionArn]),
-    );
-    inventorySchedulerRole.addToPolicy(
-      allow(
-        "PassInventoryJobRoles",
-        ["iam:PassRole"],
-        [jobTaskRole.roleArn, jobExecutionRole.roleArn],
-      ),
+      allow("RunInventoryJob", ["lambda:InvokeFunction"], [jobFunction.functionArn]),
     );
     new scheduler.CfnSchedule(this, "InventorySchedule", {
       name: "brain-inventory-weekly",
@@ -411,73 +259,9 @@ export class BrainStack extends Stack {
       scheduleExpressionTimezone: "America/Lima",
       flexibleTimeWindow: { mode: "OFF" },
       target: {
-        arn: cluster.clusterArn,
+        arn: jobFunction.functionArn,
         roleArn: inventorySchedulerRole.roleArn,
         retryPolicy: { maximumRetryAttempts: 1 },
-        ecsParameters: {
-          taskDefinitionArn: jobTaskDefinition.taskDefinitionArn,
-          launchType: "FARGATE",
-          taskCount: 1,
-          networkConfiguration: {
-            awsvpcConfiguration: {
-              subnets: vpc.publicSubnets.map((s) => s.subnetId),
-              securityGroups: [jobSg.securityGroupId],
-              assignPublicIp: "ENABLED",
-            },
-          },
-        },
-      },
-    });
-
-    // ------------------------------------------------------------- Probe
-    const probeRole = serviceRole(
-      this,
-      "ProbeRole",
-      "brain-probe",
-      "lambda.amazonaws.com",
-      "Lambda Probe",
-    );
-    probeRole.addToPolicy(
-      allow("ReadProbeSecret", ["secretsmanager:GetSecretValue"], [probeSecret.secretArn]),
-    );
-    probeRole.addToPolicy(
-      allow("ProbeLogs", ["logs:CreateLogStream", "logs:PutLogEvents"], [probeLogs.logGroupArn]),
-    );
-    const probeFunction = new lambda.Function(this, "ProbeFunction", {
-      functionName: PROBE_FUNCTION_NAME,
-      runtime: lambda.Runtime.NODEJS_22_X,
-      architecture: lambda.Architecture.ARM_64,
-      memorySize: 128,
-      timeout: Duration.seconds(40),
-      handler: "handler.handler",
-      code: lambda.Code.fromAsset(PROBE_ASSET_DIR),
-      role: probeRole,
-      logGroup: probeLogs,
-      environment: {
-        BRAIN_URL: `https://${params.brainDomain}`,
-        TOKEN_URL: `${cognitoDomain.baseUrl()}/oauth2/token`,
-        PROBE_SECRET_ARN: probeSecret.secretArn,
-        PROBE_SCOPE: "brain/probe",
-      },
-    });
-    const probeSchedulerRole = serviceRole(
-      this,
-      "ProbeSchedulerRole",
-      "brain-scheduler-probe",
-      "scheduler.amazonaws.com",
-      "Calendario por minuto de Probe",
-    );
-    probeSchedulerRole.addToPolicy(
-      allow("InvokeProbe", ["lambda:InvokeFunction"], [probeFunction.functionArn]),
-    );
-    new scheduler.CfnSchedule(this, "ProbeSchedule", {
-      name: "brain-probe-every-minute",
-      scheduleExpression: "rate(1 minute)",
-      flexibleTimeWindow: { mode: "OFF" },
-      target: {
-        arn: probeFunction.functionArn,
-        roleArn: probeSchedulerRole.roleArn,
-        retryPolicy: { maximumRetryAttempts: 0 },
       },
     });
 
@@ -486,158 +270,129 @@ export class BrainStack extends Stack {
     alarmTopic.addSubscription(new subscriptions.EmailSubscription(params.alarmEmail));
     const notify = new cwActions.SnsAction(alarmTopic);
 
-    new events.Rule(this, "InventoryJobExitRule", {
-      ruleName: "brain-inventory-job-exit",
-      description: "InventoryJob termino con codigo distinto de 0",
-      eventPattern: {
-        source: ["aws.ecs"],
-        detailType: ["ECS Task State Change"],
-        detail: {
-          clusterArn: [cluster.clusterArn],
-          group: ["family:brain-inventory-job"],
-          lastStatus: ["STOPPED"],
-          containers: { exitCode: [{ "anything-but": 0 }] },
-        },
-      },
-      targets: [new eventTargets.SnsTopic(alarmTopic)],
-    });
-
-    const metric = (metricName, statistic, period, dimensionsMap) =>
-      new cw.Metric({ namespace: METRICS_NAMESPACE, metricName, statistic, period, dimensionsMap });
-    const rateAlarm = (id, alarmName, errorsMetric, minutes, threshold) =>
-      new cw.MathExpression({
-        expression: "IF(r >= 20, e / r, 0)",
-        usingMetrics: {
-          r: metric("Requests", "Sum", Duration.minutes(minutes)),
-          e: metric(errorsMetric, "Sum", Duration.minutes(minutes)),
-        },
-        period: Duration.minutes(minutes),
-      }).createAlarm(this, id, {
+    const minutes = (n) => Duration.minutes(n);
+    const metric = (metricName, statistic, period) =>
+      new cw.Metric({ namespace: METRICS_NAMESPACE, metricName, statistic, period });
+    const alarmOn = (id, alarmName, source, threshold) =>
+      source.createAlarm(this, id, {
         alarmName,
         threshold,
         evaluationPeriods: 1,
         comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
         treatMissingData: cw.TreatMissingData.NOT_BREACHING,
       });
+    const rateOf = (errorsMetric, mins) =>
+      new cw.MathExpression({
+        expression: "IF(r >= 20, e / r, 0)",
+        usingMetrics: {
+          r: metric("Requests", "Sum", minutes(mins)),
+          e: metric(errorsMetric, "Sum", minutes(mins)),
+        },
+        period: minutes(mins),
+      });
+
+    // Fallas que el cerebro no llega a contar: excepción, timeout o throttling de la
+    // Lambda (la Function URL responde 5xx sin pasar por el código).
+    const lambdaFailures = (period) =>
+      new cw.MathExpression({
+        expression: "FILL(e, 0) + FILL(t, 0)",
+        usingMetrics: {
+          e: apiFunction.metricErrors({ period, statistic: "Sum" }),
+          t: apiFunction.metricThrottles({ period, statistic: "Sum" }),
+        },
+        period,
+        label: "Errores y throttling de la Lambda",
+      });
+    // Disponibilidad con tráfico real (NFR1.4), por hora.
+    const hour = Duration.hours(1);
+    const availability = new cw.MathExpression({
+      expression: "IF(i > 0, 100 * (1 - (FILL(x, 0) + FILL(e, 0) + FILL(t, 0)) / i), 100)",
+      usingMetrics: {
+        i: apiFunction.metricInvocations({ period: hour, statistic: "Sum" }),
+        x: metric("Errors5xx", "Sum", hour),
+        e: apiFunction.metricErrors({ period: hour, statistic: "Sum" }),
+        t: apiFunction.metricThrottles({ period: hour, statistic: "Sum" }),
+      },
+      period: hour,
+      label: "Disponibilidad (%)",
+    });
 
     const alarms = [
-      rateAlarm("Alarm5xxRate", "brain-5xx-rate", "Errors5xx", 5, 0.05),
-      rateAlarm("Alarm429Rate", "brain-429-rate", "Errors429", 15, 0.1),
-      new cw.MathExpression({
-        expression: "IF(r >= 20, p, 0)",
-        usingMetrics: {
-          r: metric("Requests", "Sum", Duration.minutes(15)),
-          p: metric("Latency", "p95", Duration.minutes(15)),
-        },
-        period: Duration.minutes(15),
-      }).createAlarm(this, "AlarmLatencyP95", {
-        alarmName: "brain-latency-p95",
-        threshold: 20_000,
-        evaluationPeriods: 1,
-        comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treatMissingData: cw.TreatMissingData.NOT_BREACHING,
-      }),
-      metric("ProbeSuccess", "Minimum", Duration.minutes(1)).createAlarm(this, "AlarmProbe", {
-        alarmName: "brain-probe-failed",
-        threshold: 1,
-        evaluationPeriods: 3,
-        datapointsToAlarm: 3,
-        comparisonOperator: cw.ComparisonOperator.LESS_THAN_THRESHOLD,
-        treatMissingData: cw.TreatMissingData.BREACHING,
-      }),
-      metric("UsageGuardFallback", "Sum", Duration.minutes(5)).createAlarm(
-        this,
+      alarmOn("AlarmApiFailures", "brain-api-failures", lambdaFailures(minutes(15)), 2),
+      alarmOn("Alarm5xxRate", "brain-5xx-rate", rateOf("Errors5xx", 5), 0.05),
+      alarmOn("Alarm429Rate", "brain-429-rate", rateOf("Errors429", 15), 0.1),
+      alarmOn(
+        "AlarmLatencyP95",
+        "brain-latency-p95",
+        new cw.MathExpression({
+          expression: "IF(r >= 20, p, 0)",
+          usingMetrics: {
+            r: metric("Requests", "Sum", minutes(15)),
+            p: metric("Latency", "p95", minutes(15)),
+          },
+          period: minutes(15),
+        }),
+        20_000,
+      ),
+      alarmOn(
         "AlarmUsageFallback",
-        {
-          alarmName: "brain-usage-fallback",
-          threshold: 0,
-          evaluationPeriods: 1,
-          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.NOT_BREACHING,
-        },
+        "brain-usage-fallback",
+        metric("UsageGuardFallback", "Sum", minutes(5)),
+        0,
       ),
-      metric("InventoryReloadFailed", "Sum", Duration.minutes(15)).createAlarm(
-        this,
+      alarmOn(
         "AlarmInventoryReload",
-        {
-          alarmName: "brain-inventory-reload",
-          threshold: 0,
-          evaluationPeriods: 1,
-          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.NOT_BREACHING,
-        },
+        "brain-inventory-reload",
+        metric("InventoryReloadFailed", "Sum", minutes(15)),
+        0,
       ),
-      metric("InventoryJobFailed", "Maximum", Duration.hours(1)).createAlarm(
-        this,
+      alarmOn(
         "AlarmInventoryJob",
-        {
-          alarmName: "brain-inventory-job",
-          threshold: 0,
-          evaluationPeriods: 1,
-          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.NOT_BREACHING,
-        },
+        "brain-inventory-job",
+        metric("InventoryJobFailed", "Maximum", hour),
+        0,
       ),
-      metric("InventoryAgeDays", "Maximum", Duration.hours(1)).createAlarm(
-        this,
+      alarmOn(
+        "AlarmInventoryJobErrors",
+        "brain-inventory-job-errors",
+        jobFunction.metricErrors({ period: hour, statistic: "Sum" }),
+        0,
+      ),
+      // Sin tráfico no hay dato de antigüedad: no cuenta como falla; el job tiene
+      // sus propias alarmas.
+      alarmOn(
         "AlarmInventoryAge",
-        {
-          alarmName: "brain-inventory-age",
-          threshold: 14,
-          evaluationPeriods: 1,
-          comparisonOperator: cw.ComparisonOperator.GREATER_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.BREACHING,
-        },
+        "brain-inventory-age",
+        metric("InventoryAgeDays", "Maximum", hour),
+        14,
       ),
-      targetGroup.metrics
-        .healthyHostCount({ period: Duration.minutes(1), statistic: "Minimum" })
-        .createAlarm(this, "AlarmHealthyHosts", {
-          alarmName: "brain-healthy-hosts",
-          threshold: TASK_COUNT,
-          evaluationPeriods: 15,
-          comparisonOperator: cw.ComparisonOperator.LESS_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.BREACHING,
-        }),
-      targetGroup.metrics
-        .healthyHostCount({ period: Duration.minutes(1), statistic: "Minimum" })
-        .createAlarm(this, "AlarmNoHosts", {
-          alarmName: "brain-no-hosts",
-          threshold: 1,
-          evaluationPeriods: 2,
-          comparisonOperator: cw.ComparisonOperator.LESS_THAN_THRESHOLD,
-          treatMissingData: cw.TreatMissingData.BREACHING,
-        }),
     ];
     for (const alarm of alarms) alarm.addAlarmAction(notify);
 
     // ---------------------------------------------------------------- tablero
-    const operations = ["interpret", "map_residue", "waf_pre_fill", "waf_post_fill"];
     new cw.Dashboard(this, "Dashboard", {
       dashboardName: "Brain",
       widgets: [
         [
           new cw.GraphWidget({
-            title: "Disponibilidad (ProbeSuccess, media por hora)",
-            left: [metric("ProbeSuccess", "Average", Duration.hours(1))],
+            title: "Disponibilidad con tráfico real (% por hora)",
+            left: [availability],
+            leftYAxis: { min: 0, max: 100 },
             width: 12,
           }),
           new cw.GraphWidget({
-            title: "Latencia p95 por operación (ms)",
-            left: operations.map((op) =>
-              metric("Latency", "p95", Duration.minutes(5), { operation: op }),
-            ),
+            title: "Latencia p95 (ms)",
+            left: [metric("Latency", "p95", minutes(5))],
             width: 12,
           }),
         ],
         [
           new cw.GraphWidget({
-            title: "Errores por código",
+            title: "Errores (el detalle por código está en los logs)",
             left: [
-              new cw.MathExpression({
-                expression: `SEARCH('{${METRICS_NAMESPACE},operation,code} MetricName="Errors"', 'Sum', 300)`,
-                label: "Errors",
-                period: Duration.minutes(5),
-              }),
+              metric("Errors5xx", "Sum", minutes(5)),
+              metric("Errors429", "Sum", minutes(5)),
+              lambdaFailures(minutes(5)),
             ],
             width: 12,
           }),
@@ -653,25 +408,8 @@ export class BrainStack extends Stack {
         [
           new cw.SingleValueWidget({
             title: "Antigüedad del inventario (días)",
-            metrics: [metric("InventoryAgeDays", "Maximum", Duration.hours(1))],
-            width: 8,
-          }),
-          new cw.GraphWidget({
-            title: "Tareas sanas",
-            left: [targetGroup.metrics.healthyHostCount({ statistic: "Minimum" })],
-            width: 8,
-          }),
-          new cw.GraphWidget({
-            title: "Peticiones bloqueadas por el WAF",
-            left: [
-              new cw.Metric({
-                namespace: "AWS/WAFV2",
-                metricName: "BlockedRequests",
-                statistic: "Sum",
-                dimensionsMap: { WebACL: "brain-web-acl", Rule: "rate-per-ip", Region: region },
-              }),
-            ],
-            width: 8,
+            metrics: [metric("InventoryAgeDays", "Maximum", hour)],
+            width: 12,
           }),
         ],
       ],
@@ -709,7 +447,10 @@ export class BrainStack extends Stack {
     });
 
     // ------------------------------------------------------------- salidas (u7)
-    new CfnOutput(this, "BrainUrl", { value: `https://${params.brainDomain}` });
+    // La Function URL termina en "/"; sync-brain-config.js espera un origen https.
+    new CfnOutput(this, "BrainUrl", {
+      value: Fn.join("", ["https://", Fn.select(2, Fn.split("/", apiUrl.url))]),
+    });
     new CfnOutput(this, "CognitoDomain", { value: cognitoDomain.baseUrl() });
     new CfnOutput(this, "ExtensionClientId", { value: extensionClient.userPoolClientId });
     new CfnOutput(this, "InventoryBucketName", { value: bucket.bucketName });

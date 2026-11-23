@@ -1,0 +1,25 @@
+{
+  "stage": "code-generation",
+  "unit": "u2-input-parsers",
+  "version": 1,
+  "writes": [
+    { "path": "aws-calculator-extension/lib/input/input-schema.js" },
+    { "path": "aws-calculator-extension/lib/input/input-errors.js" },
+    { "path": "aws-calculator-extension/lib/input/json-parser.js" },
+    { "path": "aws-calculator-extension/lib/input/nl-interpreter.js" },
+    { "path": "aws-calculator-extension/lib/input/input-normalizer.js" },
+    { "path": "aws-calculator-extension/sidepanel.js" },
+    { "path": "tests/u2/fixtures.js" },
+    { "path": "tests/u2/json-parser.test.js" },
+    { "path": "tests/u2/nl-interpreter.test.js" },
+    { "path": "tests/u2/input-normalizer.test.js" },
+    { "path": "tests/u2/input-errors.test.js" },
+    { "path": "tests/u2/normalize.integration.test.js" },
+    { "path": "tests/u2/imports.test.js" },
+    { "path": "tests/u1/json-parser.test.js" },
+    { "path": "tests/u1/input-normalizer.test.js" },
+    { "path": "vitest.config.js" },
+    { "path": "eslint.config.js" },
+    { "path": "package.json" }
+  ]
+}

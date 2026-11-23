@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "AWS Calculator — Applying",
   "version": "3.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx87vKCwk0QgorS/ZhleKDEY5Sy9rigF/pOAGJTD4B+cdjPHbneDMLLb57gBVmERMw1/5eVdzYkikLgBhaf5WJWaCjEOWa6YmHJ9ChuB6qEocxdZW9oazCzWPVEtZQQBR7I1uA0ELlcI/hVco0/MCuXzxDBu8p7qpUJj2avJ0iESAn31dWr4FJttWWnFmVlazquMcpUkePZCEv49v/ikqUz7kHKTjIwyjDr/RH3jowgRocqWxGFDyxVqSsFZOEGRQEUKbaT4CnqUVF5mUwSJLr8/NC90t2k2Td9hJHAmaCQYHmJzWXokFlv7Ems3a7tyKojMh0eUqwgsI1UbLXEC9jQIDAQAB",
   "description": "RPA: genera estimados en AWS Pricing Calculator desde un JSON, desde el panel lateral.",
   "minimum_chrome_version": "130",
   "permissions": ["tabs", "scripting", "sidePanel", "storage", "unlimitedStorage", "identity"],

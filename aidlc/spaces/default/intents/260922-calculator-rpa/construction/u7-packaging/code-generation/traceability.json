@@ -1,0 +1,43 @@
+{
+  "stage": "code-generation",
+  "unit": "u7-packaging",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR3.1",
+    "NFR4.1",
+    "NFR4.2",
+    "NFR4.3",
+    "NFR4.4",
+    "NFR5.1",
+    "NFR5.2",
+    "NFR5.3",
+    "NFR5.4",
+    "NFR5.5",
+    "NFR5.6",
+    "NFR6.1",
+    "NFR7.1",
+    "NFR7.2",
+    "NFR7.3",
+    "NFR8.1"
+  ],
+  "coverage": [
+    { "id": "NFR1.1", "status": "OK", "target": "aws-calculator-extension/sw/config.js" },
+    { "id": "NFR3.1", "status": "OK", "target": "aws-calculator-extension/sw/brain-client.js" },
+    { "id": "NFR4.1", "status": "OK", "target": "scripts/check-bundle.js" },
+    { "id": "NFR4.2", "status": "OK", "target": "aws-calculator-extension/manifest.json" },
+    { "id": "NFR4.3", "status": "OK", "target": "scripts/bundle-policy.json" },
+    { "id": "NFR4.4", "status": "OK", "target": "aws-calculator-extension/manifest.json" },
+    { "id": "NFR5.1", "status": "OK", "target": "scripts/check-bundle.js" },
+    { "id": "NFR5.2", "status": "OK", "target": "aws-calculator-extension/sw/session.js" },
+    { "id": "NFR5.3", "status": "OK", "target": "aws-calculator-extension/sw/dispatch.js" },
+    { "id": "NFR5.4", "status": "OK", "target": "aws-calculator-extension/sw/brain-client.js" },
+    { "id": "NFR5.5", "status": "OK", "target": "aws-calculator-extension/sw/router.js" },
+    { "id": "NFR5.6", "status": "OK", "target": "aws-calculator-extension/sw/auth-flow.js" },
+    { "id": "NFR6.1", "status": "OK", "target": "vitest.config.js" },
+    { "id": "NFR7.1", "status": "OK", "target": "aws-calculator-extension/background.js" },
+    { "id": "NFR7.2", "status": "OK", "target": "scripts/package-zip.js" },
+    { "id": "NFR7.3", "status": "OK", "target": "scripts/check-bundle.js" },
+    { "id": "NFR8.1", "status": "OK", "target": "aws-calculator-extension/sw/keepalive.js" }
+  ],
+  "reverse": []
+}

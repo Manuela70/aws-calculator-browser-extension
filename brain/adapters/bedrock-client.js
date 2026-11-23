@@ -1,6 +1,7 @@
 // brain/adapters/bedrock-client.js — Invocación de Claude en Amazon Bedrock con la
 // identidad IAM de la tarea (BR1.3, NFR5.1): sin claves en el código ni en la
-// configuración. Este adaptador no registra prompts ni respuestas; el registro
+// configuración. Si Bedrock vive en otra cuenta, `runtime` llega con credenciales
+// temporales del rol de esa cuenta (server/index.js); este módulo no lo distingue. Este adaptador no registra prompts ni respuestas; el registro
 // de invocaciones de Bedrock queda desactivado en la cuenta (NFR5.5).
 // Traduce cualquier fallo del SDK a ModelError con un `kind` y descarta el
 // mensaje del proveedor.
@@ -29,16 +30,25 @@ export function classifyBedrockError(error, signal) {
   return "client";
 }
 
-export function createBedrockClient({ runtime, modelId, anthropicVersion }) {
+// Cuerpo del pedido. Sin `temperature` ni otros parámetros de muestreo: los modelos
+// Claude actuales (Opus 5.5 y posteriores) los rechazan con 400. El esfuerzo, si la
+// configuración lo fija, va en `output_config.effort` y acota el razonamiento, que en
+// esos modelos siempre está activo y cuenta dentro de `max_tokens`.
+export function buildRequestBody({ anthropicVersion, maxTokens, effort, system, user }) {
+  const body = {
+    anthropic_version: anthropicVersion,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content: [{ type: "text", text: user }] }],
+  };
+  if (effort) body.output_config = { effort };
+  return body;
+}
+
+export function createBedrockClient({ runtime, modelId, anthropicVersion, effort }) {
   return {
     async invoke({ system, user, maxTokens, signal }) {
-      const body = {
-        anthropic_version: anthropicVersion,
-        max_tokens: maxTokens,
-        temperature: 0,
-        system,
-        messages: [{ role: "user", content: [{ type: "text", text: user }] }],
-      };
+      const body = buildRequestBody({ anthropicVersion, maxTokens, effort, system, user });
       let response;
       try {
         response = await runtime.send(

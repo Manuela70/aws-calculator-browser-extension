@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyBedrockError, createBedrockClient } from "../../brain/adapters/bedrock-client.js";
+import {
+  buildRequestBody,
+  classifyBedrockError,
+  createBedrockClient,
+} from "../../brain/adapters/bedrock-client.js";
 import { parseInventoryInWorker } from "../../brain/adapters/inventory-parser.js";
 import {
   ACTIVE_KEY,
@@ -152,6 +156,29 @@ describe("bedrock-client", () => {
     expect(result).toEqual({ text: '{"ok":true}', inputTokens: 10, outputTokens: 5 });
     const body = JSON.parse(runtime.send.mock.calls[0][0].input.body);
     expect(body).toMatchObject({ max_tokens: 600, system: "S", anthropic_version: "v" });
+  });
+
+  it("no envía parámetros de muestreo; agrega el esfuerzo solo si la configuración lo fija", () => {
+    const base = { anthropicVersion: "v", maxTokens: 10, system: "S", user: "U" };
+    const plain = buildRequestBody(base);
+    expect(plain).not.toHaveProperty("temperature");
+    expect(plain).not.toHaveProperty("top_p");
+    expect(plain).not.toHaveProperty("output_config");
+    expect(buildRequestBody({ ...base, effort: "low" }).output_config).toEqual({ effort: "low" });
+  });
+
+  it("el cliente pasa el esfuerzo configurado en cada invocación", async () => {
+    const runtime = { send: vi.fn(async () => bedrockPayload("x")) };
+    const client = createBedrockClient({
+      runtime,
+      modelId: "m",
+      anthropicVersion: "v",
+      effort: "low",
+    });
+    await client.invoke({ system: "S", user: "U", maxTokens: 5 });
+    const body = JSON.parse(runtime.send.mock.calls[0][0].input.body);
+    expect(body.output_config).toEqual({ effort: "low" });
+    expect(body).not.toHaveProperty("temperature");
   });
 
   it("clasifica throttling, 5xx, aborto y errores del cliente sin copiar el mensaje", async () => {

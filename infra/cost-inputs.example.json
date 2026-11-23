@@ -1,24 +1,16 @@
 {
-  "_nota": "VALORES FICTICIOS solo para cdk synth local y pruebas. No son precios de AWS. Copia este archivo a cost-inputs.json y reemplaza cada valor con la AWS Pricing Calculator (us-east-1) antes del primer despliegue.",
+  "_nota": "VALORES FICTICIOS solo para cdk synth local y pruebas. No son precios de AWS. Copia este archivo a cost-inputs.json y reemplaza cada valor con precios oficiales de us-east-1 antes del primer despliegue.",
   "monthlyBudgetUsd": 50,
   "fixedMonthlyUsd": {
-    "alb": 1,
-    "fargate": 1,
+    "lambda": 1,
     "inventoryJob": 1,
-    "publicIpv4": 1,
-    "waf": 1,
-    "probeLambda": 1,
-    "probeBedrock": 1,
     "dynamodb": 1,
     "s3": 1,
     "cloudwatch": 1,
-    "route53": 1,
-    "secretsManager": 1,
     "ecr": 1
   },
   "inputPricePerMillionTokensUsd": 1,
   "outputPricePerMillionTokensUsd": 1,
   "inputToOutputRatio": 1,
-  "probeAvgTokensPerOperation": 1000,
   "seCount": 10
 }

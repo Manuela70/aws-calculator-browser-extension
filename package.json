@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint aws-calculator-extension tests scripts brain infra",
+    "check:selectors": "eslint aws-calculator-extension",
     "format": "prettier --write \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"brain/**/*.{js,mjs}\" \"infra/**/*.mjs\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
     "format:check": "prettier --check \"aws-calculator-extension/**/*.{js,json,html,css}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"brain/**/*.{js,mjs}\" \"infra/**/*.mjs\" \"*.config.js\" \".github/**/*.yml\" .prettierrc",
     "test": "vitest run",

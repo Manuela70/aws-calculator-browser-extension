@@ -1,0 +1,87 @@
+# Rol de solo invocación de Bedrock, para desplegar en la CUENTA QUE TIENE BEDROCK
+# (no en la del cerebro). Lo asumen únicamente dos roles de la cuenta del cerebro:
+#   - brain-api-task: la tarea del cerebro, para invocar el modelo.
+#   - github-brain-build: el job `diff` del pipeline, solo para verificar el modelo.
+# Sin claves de larga vida: credenciales temporales de STS (NFR5.1).
+#
+# Despliegue (en la cuenta con Bedrock, us-east-1):
+#   aws cloudformation deploy --template-file infra/cross-account/bedrock-invoke-role.yaml \
+#     --stack-name brain-bedrock-invoke --capabilities CAPABILITY_NAMED_IAM \
+#     --parameter-overrides BrainAccountId=<cuenta del cerebro> ModelId=<model id de brain/config.json>
+# La salida RoleArn va al parámetro de despliegue `bedrockRoleArn` y a la variable
+# BEDROCK_ROLE_ARN del repositorio.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rol de solo invocación de Bedrock para el cerebro de la extensión AWS Calculator.
+
+Parameters:
+  BrainAccountId:
+    Type: String
+    AllowedPattern: "^\\d{12}$"
+    Description: Cuenta de AWS donde corre el cerebro (stack brain).
+  ModelId:
+    Type: String
+    Description: model.modelId de brain/config.json (modelo directo o perfil de inferencia "us.").
+  ModelRegion:
+    Type: String
+    Default: us-east-1
+
+Conditions:
+  IsInferenceProfile: !Or
+    - !Equals [!Select [0, !Split [".", !Ref ModelId]], "us"]
+    - !Equals [!Select [0, !Split [".", !Ref ModelId]], "global"]
+
+Resources:
+  BedrockInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: brain-bedrock-invoke
+      Description: Invocación de Bedrock para brain-api (cuenta del cerebro); sin otros permisos.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: OnlyBrainRoles
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${BrainAccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn:
+                  - !Sub "arn:${AWS::Partition}:iam::${BrainAccountId}:role/brain-api-task"
+                  - !Sub "arn:${AWS::Partition}:iam::${BrainAccountId}:role/github-brain-build"
+      Policies:
+        - PolicyName: invoke-configured-model
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: InvokeConfiguredModel
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: !If
+                  - IsInferenceProfile
+                  - - !Sub "arn:${AWS::Partition}:bedrock:${ModelRegion}:${AWS::AccountId}:inference-profile/${ModelId}"
+                    - !Sub
+                      - "arn:${AWS::Partition}:bedrock:*::foundation-model/${BaseModel}"
+                      - BaseModel:
+                          !Join [
+                            ".",
+                            [
+                              !Select [1, !Split [".", !Ref ModelId]],
+                              !Select [2, !Split [".", !Ref ModelId]],
+                            ],
+                          ]
+                  - - !Sub "arn:${AWS::Partition}:bedrock:${ModelRegion}::foundation-model/${ModelId}"
+              - Sid: CheckConfiguredModel
+                Effect: Allow
+                Action:
+                  - bedrock:GetFoundationModel
+                  - bedrock:GetInferenceProfile
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:${ModelRegion}::foundation-model/*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${ModelRegion}:${AWS::AccountId}:inference-profile/*"
+
+Outputs:
+  RoleArn:
+    Description: Valor para bedrockRoleArn (deploy-params.json) y BEDROCK_ROLE_ARN (variable del repo).
+    Value: !GetAtt BedrockInvokeRole.Arn

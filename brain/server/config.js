@@ -25,13 +25,11 @@ export function loadPrompts() {
 const REQUIRED_ENV = [
   "ALLOWED_ORIGINS",
   "ALLOWED_CLIENT_IDS",
-  "PROBE_CLIENT_ID",
   "COGNITO_ISSUER",
   "INVENTORY_BUCKET",
   "USAGE_TABLE",
   "DAILY_TOKEN_CAP",
   "GLOBAL_DAILY_TOKEN_CAP",
-  "PROBE_DAILY_TOKEN_CAP",
   "SE_HASH_SALT",
 ];
 
@@ -59,16 +57,26 @@ export function readEnvConfig(env) {
     port: env.PORT ? positiveInt("PORT", env.PORT) : 8080,
     allowedOrigins,
     allowedClientIds: list(env.ALLOWED_CLIENT_IDS),
-    probeClientId: env.PROBE_CLIENT_ID.trim(),
     issuer: env.COGNITO_ISSUER.trim(),
     inventoryBucket: env.INVENTORY_BUCKET.trim(),
     usageTable: env.USAGE_TABLE.trim(),
     region: env.AWS_REGION?.trim() || undefined,
     dailyTokenCap: positiveInt("DAILY_TOKEN_CAP", env.DAILY_TOKEN_CAP),
     globalDailyTokenCap: positiveInt("GLOBAL_DAILY_TOKEN_CAP", env.GLOBAL_DAILY_TOKEN_CAP),
-    probeDailyTokenCap: positiveInt("PROBE_DAILY_TOKEN_CAP", env.PROBE_DAILY_TOKEN_CAP),
     seHashSalt: env.SE_HASH_SALT,
+    bedrockRoleArn: crossAccountRoleArn(env.BEDROCK_ROLE_ARN),
   };
+}
+
+const ROLE_ARN = /^arn:aws[\w-]*:iam::\d{12}:role\/[\w+=,.@/-]{1,128}$/;
+
+// Rol de la cuenta que tiene Bedrock (opcional). Vacío o ausente: Bedrock en esta
+// misma cuenta con la identidad de la tarea.
+function crossAccountRoleArn(value) {
+  const arn = value?.trim();
+  if (!arn) return undefined;
+  if (!ROLE_ARN.test(arn)) throw new Error("BEDROCK_ROLE_ARN no es un ARN de rol de IAM válido");
+  return arn;
 }
 
 // Lugares del semáforo por instancia: floor(15 / MAX_INSTANCES) (NFR3.4).

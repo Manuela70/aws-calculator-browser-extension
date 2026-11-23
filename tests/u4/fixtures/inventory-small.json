@@ -21,17 +21,41 @@
           "kind": "choice",
           "options": ["Linux", "Windows Server", "Red Hat Enterprise Linux"]
         },
-        { "label": "Instance type", "conditional": false, "template": "Quick estimate", "kind": "complex" },
-        { "label": "Quantity", "conditional": false, "template": "Quick estimate", "kind": "quantity" },
-        { "label": "Utilization", "conditional": false, "template": "Quick estimate", "kind": "quantity" },
+        {
+          "label": "Instance type",
+          "conditional": false,
+          "template": "Quick estimate",
+          "kind": "complex"
+        },
+        {
+          "label": "Quantity",
+          "conditional": false,
+          "template": "Quick estimate",
+          "kind": "quantity"
+        },
+        {
+          "label": "Utilization",
+          "conditional": false,
+          "template": "Quick estimate",
+          "kind": "quantity"
+        },
         {
           "label": "Storage for each EC2 instance",
           "conditional": false,
           "template": "Quick estimate",
           "kind": "choice",
-          "options": ["General Purpose SSD (gp3)", "General Purpose SSD (gp2)", "Provisioned IOPS SSD (io2)"]
+          "options": [
+            "General Purpose SSD (gp3)",
+            "General Purpose SSD (gp2)",
+            "Provisioned IOPS SSD (io2)"
+          ]
         },
-        { "label": "Storage amount", "conditional": true, "template": "Quick estimate", "kind": "quantity" },
+        {
+          "label": "Storage amount",
+          "conditional": true,
+          "template": "Quick estimate",
+          "kind": "quantity"
+        },
         {
           "label": "Storage amount unit",
           "conditional": true,
@@ -46,7 +70,12 @@
           "kind": "choice",
           "options": ["Linux", "Windows Server"]
         },
-        { "label": "Advance EC2 instance", "conditional": false, "template": "Advanced estimate", "kind": "complex" }
+        {
+          "label": "Advance EC2 instance",
+          "conditional": false,
+          "template": "Advanced estimate",
+          "kind": "complex"
+        }
       ]
     },
     {
@@ -99,8 +128,16 @@
           "kind": "unit",
           "options": ["KB", "MB", "GB", "TB", "PB"]
         },
-        { "label": "PUT, COPY, POST, LIST requests to S3 Standard", "conditional": true, "kind": "quantity" },
-        { "label": "GET, SELECT, and all other requests from S3 Standard", "conditional": true, "kind": "quantity" }
+        {
+          "label": "PUT, COPY, POST, LIST requests to S3 Standard",
+          "conditional": true,
+          "kind": "quantity"
+        },
+        {
+          "label": "GET, SELECT, and all other requests from S3 Standard",
+          "conditional": true,
+          "kind": "quantity"
+        }
       ]
     },
     {
@@ -130,7 +167,14 @@
           "conditional": true,
           "template": "Lambda Function -  Include Free Tier",
           "kind": "unit",
-          "options": ["per second", "per minute", "per hour", "per day", "per month", "million per month"]
+          "options": [
+            "per second",
+            "per minute",
+            "per hour",
+            "per day",
+            "per month",
+            "million per month"
+          ]
         },
         {
           "label": "Provisioned Concurrency > Architecture",
@@ -157,7 +201,14 @@
           "conditional": true,
           "template": "Lambda Function -  Without Free Tier",
           "kind": "unit",
-          "options": ["per second", "per minute", "per hour", "per day", "per month", "million per month"]
+          "options": [
+            "per second",
+            "per minute",
+            "per hour",
+            "per day",
+            "per month",
+            "million per month"
+          ]
         }
       ]
     },

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   collectInputs,
   fetchRawServices,
@@ -6,7 +6,6 @@ import {
   runInventoryJob,
   toRawService,
 } from "../../brain/jobs/build-inventory.mjs";
-import { caseForMinute, handler, resetTokenCache } from "../../brain/probe/handler.mjs";
 import { sha256 } from "./helpers.js";
 
 // Servicio crudo con `fields` campos numéricos.
@@ -192,84 +191,5 @@ describe("InventoryJob (BR5.1, BR5.2)", () => {
     const result = await fetchRawServices({ fetchImpl, manifestUrl: "https://d/manifest.json" });
     expect(result.rawServices.map((s) => s.serviceCode)).toEqual(["a"]);
     expect(result.missing).toBe(1);
-  });
-});
-
-function probeDeps({
-  brainStatus = 200,
-  secret = { clientId: "probe", clientSecret: "s3cr3t" },
-} = {}) {
-  const logs = [];
-  const fetchImpl = vi.fn(async (url) => {
-    if (url.endsWith("/oauth2/token")) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ access_token: "tok", expires_in: 3600 }),
-      };
-    }
-    return { ok: brainStatus === 200, status: brainStatus };
-  });
-  return {
-    logs,
-    fetchImpl,
-    deps: {
-      env: {
-        BRAIN_URL: "https://brain.example.org",
-        TOKEN_URL: "https://auth.example.org/oauth2/token",
-        PROBE_SECRET_ARN: "arn:aws:secretsmanager:us-east-1:111111111111:secret:probe",
-        PROBE_SCOPE: "brain/probe",
-      },
-      now: () => NOW,
-      fetchImpl,
-      log: (record) => logs.push(record),
-      getSecret: async () => {
-        if (secret instanceof Error) throw secret;
-        return secret;
-      },
-    },
-  };
-}
-
-describe("Probe (NFR1.4)", () => {
-  beforeEach(() => resetTokenCache());
-
-  it("sonda feliz: obtiene token, llama a una operación real y emite ProbeSuccess = 1", async () => {
-    const { deps, logs, fetchImpl } = probeDeps();
-    const result = await handler({}, {}, deps);
-    expect(result).toEqual({ success: true, operation: caseForMinute(NOW).operation, status: 200 });
-    expect(logs[0]).toMatchObject({ ProbeSuccess: 1 });
-    const tokenCall = fetchImpl.mock.calls[0][1];
-    expect(tokenCall.body).toContain("grant_type=client_credentials");
-    expect(fetchImpl.mock.calls[1][1].headers.authorization).toBe("Bearer tok");
-    await handler({}, {}, deps); // reutiliza el token
-    expect(fetchImpl.mock.calls.filter(([url]) => url.endsWith("/oauth2/token"))).toHaveLength(1);
-  });
-
-  it("sonda con 5xx del cerebro emite ProbeSuccess = 0", async () => {
-    const { deps, logs } = probeDeps({ brainStatus: 503 });
-    const result = await handler({}, {}, deps);
-    expect(result).toMatchObject({ success: false, status: 503, reason: "http_503" });
-    expect(logs[0].ProbeSuccess).toBe(0);
-  });
-
-  it("secreto ilegible: no llama al cerebro y emite ProbeSuccess = 0", async () => {
-    const { deps, logs, fetchImpl } = probeDeps({ secret: new Error("AccessDenied detalle") });
-    const result = await handler({}, {}, deps);
-    expect(result).toEqual({
-      success: false,
-      operation: caseForMinute(NOW).operation,
-      status: 0,
-      reason: "secret_unreadable",
-    });
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(logs[0].ProbeSuccess).toBe(0);
-    const { deps: partial } = probeDeps({ secret: { clientId: "x" } });
-    expect((await handler({}, {}, partial)).reason).toBe("secret_unreadable");
-  });
-
-  it("rota entre las tres operaciones por minuto", () => {
-    const ops = [0, 1, 2].map((m) => caseForMinute(m * 60_000).operation);
-    expect(ops).toEqual(["map_residue", "interpret", "waf_post_fill"]);
   });
 });

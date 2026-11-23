@@ -9,8 +9,8 @@
 //    puntero `active` con `previous` en una sola escritura;
 //    si no: la publica con status "rejected", no toca el puntero y emite
 //    InventoryJobFailed.
-// Uso en la tarea Fargate: node jobs/build-inventory.mjs run
-// Solo datos públicos; sin credenciales propias (rol IAM de la tarea).
+// Uso: en Lambda lo corre jobs/job-server.mjs; a mano, node jobs/build-inventory.mjs run.
+// Solo datos públicos; sin credenciales propias (rol IAM de la función).
 
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -166,10 +166,10 @@ async function readJson(name) {
   return JSON.parse(await readFile(new URL(name, import.meta.url), "utf8"));
 }
 
-async function main() {
-  const bucket = process.env.INVENTORY_BUCKET;
+// Corre el job con los adaptadores reales (S3 y el catálogo público).
+export async function runFromEnvironment(log, env = process.env) {
+  const bucket = env.INVENTORY_BUCKET;
   if (!bucket) throw new Error("falta INVENTORY_BUCKET");
-  const log = (record) => process.stdout.write(`${JSON.stringify(record)}\n`);
   const result = await runInventoryJob({
     store: createInventoryStore({ s3: new S3Client({}), bucket }),
     loadRawServices: () => fetchRawServices(),
@@ -178,6 +178,11 @@ async function main() {
     emit: log,
   });
   log({ event: "inventory_job_done", status: result.status, version: result.version });
+  return result;
+}
+
+async function main() {
+  await runFromEnvironment((record) => process.stdout.write(`${JSON.stringify(record)}\n`));
 }
 
 const invokedDirectly = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
@@ -187,7 +192,7 @@ if (invokedDirectly) {
     process.exit(2);
   }
   main().catch((error) => {
-    // Falla visible: la tarea termina con código ≠ 0 y la regla de EventBridge avisa.
+    // Falla visible: el proceso termina con código ≠ 0.
     process.stdout.write(
       `${JSON.stringify({ event: "inventory_job_failed", reason: error.message })}\n`,
     );
