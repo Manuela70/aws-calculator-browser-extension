@@ -101,10 +101,16 @@ function describeInstanceTable(table) {
           .replace(/\(\s*\d[\d,.]*\s*\)/g, "")
           .trim(),
       );
-      return { root: node, label: label || UI_TEXT.INSTANCE_TYPE_FALLBACK_LABEL };
+      // El campo se pide como "Instance type"; el título de la tabla ("EC2
+      // Instances") queda como sección, así también vale "EC2 Instances > Instance type".
+      return { root: node, label: UI_TEXT.INSTANCE_TYPE_FALLBACK_LABEL, section: label || null };
     }
   }
-  return { root: table.parentElement ?? table, label: UI_TEXT.INSTANCE_TYPE_FALLBACK_LABEL };
+  return {
+    root: table.parentElement ?? table,
+    label: UI_TEXT.INSTANCE_TYPE_FALLBACK_LABEL,
+    section: null,
+  };
 }
 
 function findInstanceTables() {
@@ -257,9 +263,9 @@ export function scanFormFields() {
   const instanceTables = findInstanceTables();
   // El overlay del Spotlight nunca entra en el escaneo (BR5.2, NFR5.3).
   const isExcluded = (el) => isOverlay(el) || instanceTables.some((t) => t.root.contains(el));
-  for (const { table, root, label } of instanceTables) {
+  for (const { table, root, label, section } of instanceTables) {
     collector.add(
-      { label, section: null, type: "instance_radio" },
+      { label, section, type: "instance_radio" },
       { kind: "instance_radio", table, root },
     );
   }

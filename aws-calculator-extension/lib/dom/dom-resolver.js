@@ -402,8 +402,11 @@ async function applyInstanceRow(handle, value, signal) {
 }
 
 async function applyRadio(handle, value, signal) {
+  // La etiqueta puede envolver al radio o estar aparte con label[for] (EC2: modelo de precio).
+  const labelFor = (r) =>
+    r.id ? getText(document.querySelector(`label[for="${CSS.escape(r.id)}"]`)) : "";
   const labels = handle.radios.map(
-    (r) => getText(r.closest("label")) || r.getAttribute("aria-label") || r.value,
+    (r) => getText(r.closest("label")) || labelFor(r) || r.getAttribute("aria-label") || r.value,
   );
   const match = matchOption(value, labels);
   if (!match.ok) return optionFailure(match, value, "form.radiogroup");
