@@ -2,8 +2,24 @@
 import { describe, it, expect } from "vitest";
 import {
   cleanAriaLabel,
+  humanizeName,
   parseUnitButtonLabel,
 } from "../../aws-calculator-extension/lib/dom/aria-label.js";
+
+describe("humanizeName (grupos de radios sin título, p. ej. EC2 pricingStrategy)", () => {
+  it("convierte camelCase, snake_case y kebab-case en una etiqueta legible", () => {
+    expect(humanizeName("pricingStrategy")).toBe("Pricing strategy");
+    expect(humanizeName("payment_option")).toBe("Payment option");
+    expect(humanizeName("reserved-term")).toBe("Reserved term");
+  });
+
+  it("respeta siglas y nombres ya legibles; vacío o nulo da cadena vacía", () => {
+    expect(humanizeName("EBS Volume Type")).toBe("EBS volume type");
+    expect(humanizeName("Workloads")).toBe("Workloads");
+    expect(humanizeName("")).toBe("");
+    expect(humanizeName(null)).toBe("");
+  });
+});
 
 describe("parseUnitButtonLabel", () => {
   const table = [

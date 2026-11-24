@@ -22,7 +22,7 @@ import {
   labelledByParts,
   queryAll,
 } from "./dom-utils.js";
-import { parseUnitButtonLabel } from "./aria-label.js";
+import { humanizeName, parseUnitButtonLabel } from "./aria-label.js";
 import { joinLabelledBy } from "./cascade.js";
 
 const FIELD_SUFFIXES = [
@@ -268,7 +268,7 @@ export function scanFormFields() {
   scanSelectsAndDropdowns(collector, isExcluded);
   for (const [key, radios] of radioGroups) {
     const section = resolveSection(radios[0]);
-    const label = GENERATED_NAME.test(key) ? section : cleanAriaLabel(key);
+    const label = GENERATED_NAME.test(key) ? section : cleanAriaLabel(humanizeName(key));
     const options = radios.map(radioOptionLabel).filter(Boolean);
     collector.add(
       {

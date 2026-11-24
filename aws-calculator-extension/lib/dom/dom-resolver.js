@@ -366,9 +366,11 @@ async function scanForm({ signal } = {}) {
 // --- Acciones (BR2.4, BR2.8, BR3.4) --------------------------------------------
 
 async function applyInstanceRow(handle, value, signal) {
-  const search = queryAll("form.inputs", handle.root).find(
-    (i) => isVisible(i) && i.type !== "radio" && i.type !== "checkbox",
-  );
+  const search =
+    queryAll("instances.search", handle.root).find(isVisible) ||
+    queryAll("form.inputs", handle.root).find(
+      (i) => isVisible(i) && i.type !== "radio" && i.type !== "checkbox" && i.type !== "number",
+    );
   if (search && !(await setNativeValue(search, value, signal))) return CANCELLED;
   let lastMatches = 0;
   let row;

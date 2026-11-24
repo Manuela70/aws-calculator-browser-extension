@@ -16,6 +16,21 @@ export function cleanAriaLabel(raw) {
     .trim();
 }
 
+// Nombre técnico de un grupo de radios → etiqueta legible. calculator.aws no
+// siempre pone título al grupo (EC2: los radios del modelo de precio solo traen
+// name="pricingStrategy"): "pricingStrategy" → "Pricing strategy". Separa
+// camelCase, "_" y "-"; un nombre ya legible queda igual salvo la mayúscula inicial.
+export function humanizeName(raw) {
+  const words = String(raw ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!words) return "";
+  const lower = words.replace(/\b([A-Z])([a-z])/g, (_, a, b) => a.toLowerCase() + b);
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
 // Segmento que marca un botón de unidad en aria-labelledby (ELB, WAF).
 export const UNIT_SEGMENT = "Unit";
 

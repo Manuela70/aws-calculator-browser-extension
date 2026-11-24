@@ -39,6 +39,9 @@ export const SELECTORS = Object.freeze({
   "dropdown.selectableItem": '[class*="awsui_selectable-item"]',
   "dropdown.listbox": '[role="listbox"]',
   "dropdown.menus": '[role="listbox"], [role="menu"]',
+  // Buscador de la tabla de tipos de instancia ("Search instance type"). El bloque
+  // también contiene "Number of instances" (input number), que va antes.
+  "instances.search": 'input[type="search"]',
   "instances.rows": 'tr, [role="row"]',
   "instances.cells": 'td, [role="cell"], [role="gridcell"]',
   "instances.radio": 'input[type="radio"]',
