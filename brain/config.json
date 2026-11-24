@@ -22,7 +22,7 @@
     "inventoryStartupRetryMs": 30000,
     "jwksRefreshMs": 3600000,
     "jwksUnknownKidMinIntervalMs": 300000,
-    "usageStoreTimeoutMs": 50,
+    "usageStoreTimeoutMs": 300,
     "clockToleranceSec": 60
   },
   "concurrency": {

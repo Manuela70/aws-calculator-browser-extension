@@ -3,7 +3,7 @@
 // - 60 operaciones por minuto por SE (ventana deslizante aproximada con el
 //   minuto actual y el anterior) → rate_limited con retryAfterSeconds;
 // - cuota diaria de tokens por SE y tope global diario → daily_quota_exceeded.
-// Si el almacén compartido no responde (50 ms), cae al limitador local de la
+// Si el almacén compartido no responde (timing.usageStoreTimeoutMs), cae al limitador local de la
 // instancia con el mismo tope por minuto y al tope global / MAX_INSTANCES, y
 // emite la métrica UsageGuardFallback: el límite pasa a ser aproximado, nunca
 // desaparece.
