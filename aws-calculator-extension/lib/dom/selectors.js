@@ -32,6 +32,10 @@ export const SELECTORS = Object.freeze({
   "form.labelledControls": "input, button, select, [role='switch'], [role='checkbox']",
   "template.controls": '[role="tab"], [role="radio"], input[type="radio"]',
   "dropdown.options": '[class*="awsui_option-content"]',
+  // Etiqueta de la opción: CloudScape la repite en el atributo title del span con
+  // data-value. La región muestra además su código ("US East (N. Virginia)" +
+  // "us-east-1"), así que el texto visible no sirve para comparar.
+  "dropdown.optionLabel": "[data-value][title], [title]",
   "dropdown.selectableItem": '[class*="awsui_selectable-item"]',
   "dropdown.listbox": '[role="listbox"]',
   "dropdown.menus": '[role="listbox"], [role="menu"]',

@@ -201,11 +201,19 @@ async function openDropdownOptions(button, signal) {
   throw new DomError("not_found", { step: "dropdown", label: "dropdown.options" });
 }
 
+// Etiqueta de una opción abierta: el title que CloudScape pone en su span con
+// data-value; si no lo hay, el texto visible.
+function optionLabel(option) {
+  const titled = option.querySelector(SELECTORS["dropdown.optionLabel"]);
+  const title = titled?.getAttribute("title")?.trim();
+  return title || getText(option);
+}
+
 // BR2.8: opciones leídas al abrir, coincidencia exacta y única; nada se elige
 // si no la hay. Luego se relee el valor visible del botón (BR2.4).
 async function selectDropdownOption(button, value, signal) {
   const options = await openDropdownOptions(button, signal);
-  const match = matchOption(value, options.map(getText));
+  const match = matchOption(value, options.map(optionLabel));
   if (!match.ok) {
     closeDropdown(button);
     return optionFailure(match, value, "dropdown.options");
