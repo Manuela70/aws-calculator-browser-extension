@@ -373,13 +373,15 @@ con `infra/cdk-outputs.json` y recargado la extensión.
 3. Los permisos de la tarjeta muestran solo calculator.aws (y, si está
    configurado, el host del cerebro y el de Cognito); ningún CloudFront.
 
-### S9 — Módulos de `lib/**` con URL dinámica desde el content script
+### S9 — Módulos de `lib/**` desde el content script
 
 1. Correr S1. En la consola de la pestaña de calculator.aws no aparece
    "Failed to fetch dynamically imported module" ni errores de
    `lib/connection/brain-port.js`.
 2. En la pestaña de Red, los módulos de `lib/` se cargan desde
-   `chrome-extension://<id dinámico>/`, distinto del id de la extensión.
+   `chrome-extension://<id de la extensión>/`. Con `use_dynamic_url: true`,
+   Chrome entrega la URL dinámica pero no permite `import()` desde ella
+   (verificado el 2026-11-23): por eso la URL es fija.
 
 ### S10 — Cerebro sin configurar (`brain_unavailable`)
 

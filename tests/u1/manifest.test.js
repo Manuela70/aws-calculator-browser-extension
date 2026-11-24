@@ -23,7 +23,7 @@ describe("manifest.json", () => {
       {
         resources: ["lib/*", "lib/*/*"],
         matches: ["https://calculator.aws/*"],
-        use_dynamic_url: true,
+        use_dynamic_url: false,
       },
     ]);
   });

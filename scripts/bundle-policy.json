@@ -11,7 +11,7 @@
     {
       "resources": ["lib/*", "lib/*/*"],
       "matches": ["https://calculator.aws/*"],
-      "use_dynamic_url": true
+      "use_dynamic_url": false
     }
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx87vKCwk0QgorS/ZhleKDEY5Sy9rigF/pOAGJTD4B+cdjPHbneDMLLb57gBVmERMw1/5eVdzYkikLgBhaf5WJWaCjEOWa6YmHJ9ChuB6qEocxdZW9oazCzWPVEtZQQBR7I1uA0ELlcI/hVco0/MCuXzxDBu8p7qpUJj2avJ0iESAn31dWr4FJttWWnFmVlazquMcpUkePZCEv49v/ikqUz7kHKTjIwyjDr/RH3jowgRocqWxGFDyxVqSsFZOEGRQEUKbaT4CnqUVF5mUwSJLr8/NC90t2k2Td9hJHAmaCQYHmJzWXokFlv7Ems3a7tyKojMh0eUqwgsI1UbLXEC9jQIDAQAB",
